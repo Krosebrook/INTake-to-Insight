@@ -1,0 +1,13 @@
+# wrangler.toml — Cloudflare Pages configuration
+# Docs: https://developers.cloudflare.com/pages/configuration/wrangler-toml/
+#
+# Deploy with:
+#   npx wrangler pages deploy dist --project-name=intake-to-insight
+
+name = "intake-to-insight"
+compatibility_date = "2024-09-23"
+pages_build_output_dir = "dist"
+
+# Environment variables are set via the Cloudflare Pages dashboard
+# (Settings → Environment Variables) or via wrangler secret put.
+# Do NOT add GEMINI_API_KEY here — set it in the dashboard UI.

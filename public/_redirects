@@ -1,0 +1,6 @@
+# Cloudflare Pages — SPA redirect rule
+# All routes fall through to index.html with a 200 (not a redirect)
+# so client-side routing works correctly.
+# Docs: https://developers.cloudflare.com/pages/configuration/redirects/
+
+/*    /index.html   200
