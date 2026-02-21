@@ -130,7 +130,7 @@ cp .env.example .env
 | Build Command    | `npm run build`                 |
 | Output Directory | `dist`                          |
 | Install Command  | `npm install`                   |
-| Node.js Version  | 20.x                            |
+| Node.js Version  | ≥20.19.x (or 22+)               |
 | Env Variable     | `GEMINI_API_KEY` = `<your key>` |
 
 **Deploy via CLI:**
@@ -150,7 +150,7 @@ Security headers and SPA routing are configured in `vercel.json` (already in rep
 | Build Command      | `npm run build`                 |
 | Build Output Dir   | `dist`                          |
 | Root Directory     | `/` (repo root)                 |
-| Node.js Version    | 20                              |
+| Node.js Version    | ≥20.19.x (or 22+)               |
 | Env Variable       | `GEMINI_API_KEY` = `<your key>` |
 
 **Deploy via CLI:**

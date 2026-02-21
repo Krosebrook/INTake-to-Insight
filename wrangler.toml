@@ -9,5 +9,6 @@ compatibility_date = "2024-09-23"
 pages_build_output_dir = "dist"
 
 # Environment variables are set via the Cloudflare Pages dashboard
-# (Settings → Environment Variables) or via wrangler secret put.
+# (Settings → Environment Variables) or via `wrangler pages secret put`
+# (if your project uses the CLI for managing Pages secrets).
 # Do NOT add GEMINI_API_KEY here — set it in the dashboard UI.
