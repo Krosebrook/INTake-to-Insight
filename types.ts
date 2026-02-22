@@ -39,6 +39,7 @@ export interface DataSource {
     fileSize?: string;
     lastSync?: number;
   };
+  sampleData?: string; // Real extracted data for grounding
 }
 
 export interface GeneratedImage {

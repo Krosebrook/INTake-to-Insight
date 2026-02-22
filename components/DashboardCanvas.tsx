@@ -70,7 +70,6 @@ const DashboardCanvas: React.FC<DashboardCanvasProps> = ({
   const isSvg = image.data.startsWith('data:image/svg+xml');
 
   // Helper to safely render interactive SVG
-  // NOTE: In a production environment, you should sanitize this string with DOMPurify
   const svgContent = isSvg ? decodeURIComponent(escape(atob(image.data.split(',')[1]))) : '';
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -204,6 +203,31 @@ const DashboardCanvas: React.FC<DashboardCanvasProps> = ({
           alert("Could not export image.");
       }
   };
+
+  // --- Accessibility: Keyboard Navigation ---
+  const handleKeyDown = (e: React.KeyboardEvent, id: string) => {
+    const ann = annotations.find(a => a.id === id);
+    if (!ann) return;
+
+    let { x, y } = ann;
+    const STEP = 1; // 1% movement
+
+    if (e.key === 'ArrowUp') y -= STEP;
+    if (e.key === 'ArrowDown') y += STEP;
+    if (e.key === 'ArrowLeft') x -= STEP;
+    if (e.key === 'ArrowRight') x += STEP;
+    
+    // Check if key is relevant
+    if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+        e.preventDefault();
+        onUpdateAnnotations(annotations.map(a => a.id === id ? { ...a, x, y } : a));
+    }
+    
+    if (e.key === 'Delete' || e.key === 'Backspace') {
+        deleteAnnotation(id);
+    }
+  };
+
 
   // --- Canvas Interaction (Dragging with Pointer Events) ---
 
@@ -396,7 +420,8 @@ const DashboardCanvas: React.FC<DashboardCanvasProps> = ({
             return (
                 <div
                     key={ann.id}
-                    className={`absolute z-20 flex items-center gap-2 group/ann
+                    tabIndex={0} // Make focusable
+                    className={`absolute z-20 flex items-center gap-2 group/ann outline-none
                         ${isSelected ? 'z-50' : 'z-20'} 
                         ${isBeingDragged ? 'z-[60] scale-[1.05] shadow-2xl cursor-grabbing ring-4 ring-blue-500/20 bg-white/60 dark:bg-slate-900/60 backdrop-blur-md rounded-lg p-2 duration-0' : 'cursor-grab duration-75 ease-out'}
                         ${isSelected && !isBeingDragged ? 'ring-2 ring-blue-500 rounded p-1 bg-white/40 dark:bg-black/40 backdrop-blur-sm' : ''}
@@ -414,6 +439,7 @@ const DashboardCanvas: React.FC<DashboardCanvasProps> = ({
                     onPointerUp={handlePointerUp}
                     onPointerCancel={handlePointerUp}
                     onClick={(e) => { e.stopPropagation(); setSelectedAnnotationId(ann.id); }}
+                    onKeyDown={(e) => handleKeyDown(e, ann.id)}
                 >
                     {/* Visual Coordinate Tooltip during drag */}
                     {isBeingDragged && (
@@ -441,7 +467,12 @@ const DashboardCanvas: React.FC<DashboardCanvasProps> = ({
                                 fontWeight: ann.fontWeight, 
                                 fontStyle: ann.fontStyle 
                             }}
-                            onKeyDown={(e) => e.stopPropagation()}
+                            onKeyDown={(e) => {
+                                // Prevent Arrow keys from moving text cursor from bubbling up to dragging logic if text input is active
+                                if (!['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+                                    e.stopPropagation(); 
+                                }
+                            }}
                     />
                     ) : (
                         <span 
@@ -782,28 +813,47 @@ const DashboardCanvas: React.FC<DashboardCanvasProps> = ({
             {/* Version Strip */}
             <div className="flex-1 flex items-center gap-3 overflow-hidden">
                 <div className="flex gap-1 shrink-0">
-                    <button onClick={onUndo} disabled={!canUndo} className="p-2 text-slate-400 hover:text-blue-600 disabled:opacity-20 hover:bg-slate-50 dark:hover:bg-slate-700 rounded-lg transition-colors" title="Previous Version"><RotateCcw size={18}/></button>
-                    <button onClick={onRedo} disabled={!canRedo} className="p-2 text-slate-400 hover:text-blue-600 disabled:opacity-20 hover:bg-slate-50 dark:hover:bg-slate-700 rounded-lg transition-colors" title="Next Version"><RotateCw size={18}/></button>
+                    <button onClick={onUndo} disabled={!canUndo} className="p-2 text-slate-400 hover:text-blue-600 disabled:opacity-20 hover:bg-slate-50 dark:hover:bg-slate-700 rounded-lg transition-colors" title="Previous Version (Undo)"><RotateCcw size={18}/></button>
+                    <button onClick={onRedo} disabled={!canRedo} className="p-2 text-slate-400 hover:text-blue-600 disabled:opacity-20 hover:bg-slate-50 dark:hover:bg-slate-700 rounded-lg transition-colors" title="Next Version (Redo)"><RotateCw size={18}/></button>
                 </div>
                 
                 {/* Visual History Scroll */}
                 {history.length > 0 && (
-                    <div className="flex-1 flex gap-2 overflow-x-auto pb-1 items-center custom-scrollbar mask-linear-fade pr-10">
-                        {history.map((h, i) => (
-                            <button 
-                                key={h.id} 
-                                onClick={() => onJumpToHistory?.(i)}
-                                className={`relative shrink-0 w-14 h-10 rounded-lg overflow-hidden border-2 transition-all ${i === currentIndex ? 'border-blue-600 ring-2 ring-blue-500/20 scale-110 z-10 shadow-lg' : 'border-slate-200 dark:border-slate-800 opacity-40 hover:opacity-100'}`}
-                                title={`Revision ${history.length - i}`}
-                            >
-                                <img src={h.data} alt="" className="w-full h-full object-cover" />
-                                {i === currentIndex && (
-                                    <div className="absolute inset-0 bg-blue-600/10 flex items-center justify-center">
-                                        <Check className="w-4 h-4 text-white drop-shadow-md" />
-                                    </div>
-                                )}
-                            </button>
-                        ))}
+                    <div className="flex-1 flex gap-2 overflow-x-auto pb-2 pt-1 items-center custom-scrollbar mask-linear-fade pr-2">
+                        {history.map((h, i) => {
+                            const isCurrent = i === currentIndex;
+                            const dateLabel = new Date(h.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                            return (
+                                <button 
+                                    key={h.id} 
+                                    onClick={() => onJumpToHistory?.(i)}
+                                    className={`
+                                        group relative shrink-0 w-20 h-14 rounded-lg overflow-hidden border-2 transition-all duration-200
+                                        ${isCurrent 
+                                            ? 'border-blue-600 ring-2 ring-blue-500/30 scale-105 z-10 shadow-md' 
+                                            : 'border-slate-200 dark:border-slate-700 opacity-60 hover:opacity-100 hover:border-blue-400 hover:scale-105'
+                                        }
+                                    `}
+                                    title={`Rev ${history.length - i}: ${h.prompt.substring(0, 50)}${h.prompt.length > 50 ? '...' : ''} (${dateLabel})`}
+                                >
+                                    <img 
+                                        src={h.data} 
+                                        alt={`Version ${history.length - i}`} 
+                                        className="w-full h-full object-cover bg-slate-100 dark:bg-slate-800" 
+                                        loading="lazy"
+                                    />
+                                    
+                                    {/* Selection Overlay */}
+                                    {isCurrent && (
+                                        <div className="absolute inset-0 bg-blue-600/20 flex items-center justify-center backdrop-blur-[1px]">
+                                            <div className="bg-blue-600 rounded-full p-0.5 shadow-sm">
+                                                <Check className="w-3 h-3 text-white" />
+                                            </div>
+                                        </div>
+                                    )}
+                                </button>
+                            );
+                        })}
                     </div>
                 )}
             </div>

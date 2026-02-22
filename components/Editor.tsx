@@ -149,12 +149,17 @@ const Editor: React.FC<EditorProps> = ({ projectId, onBack }) => {
 
     setIsLoading(true);
     setLoadingStep(1);
-    setLoadingMessage("Analyzing data schema and objective...");
+    setLoadingMessage("Analyzing real-time data streams...");
     setAnalysisFacts([]);
     setError(null);
 
     try {
-        const dataContext = dataSources.map(d => `${d.name} (${d.type})`).join(', ');
+        // Construct rich context with actual sample data
+        const dataContext = dataSources.map(d => `
+        SOURCE: ${d.name} (${d.type})
+        SAMPLE DATA: 
+        ${d.sampleData || 'No specific rows, use mock data.'}
+        `).join('\n---\n');
         
         const analysis = await analyzeDashboardRequirements(objective, dataContext, level, style, brandKit);
         setAnalysisFacts([
@@ -164,22 +169,25 @@ const Editor: React.FC<EditorProps> = ({ projectId, onBack }) => {
         ]);
 
         setLoadingStep(2);
-        setLoadingMessage("Architecting layout and navigation...");
+        setLoadingMessage("Architecting multi-page layout...");
         
         await new Promise(r => setTimeout(r, 1500)); // Visual pacing
 
         setLoadingStep(3);
-        setLoadingMessage("Drafting vector components (SVG)...");
+        setLoadingMessage("Rendering interactive SVG components...");
 
         const promptContext = `
             Strategy: ${analysis.dashboardStrategy}
             KPIs to show: ${analysis.kpis.join(', ')}
             Charts to render: ${analysis.suggestedCharts.join(', ')}
+            
+            REAL DATA TO VISUALIZE:
+            ${dataContext}
         `;
         const base64 = await generateDashboardImage(promptContext, style, brandKit);
 
         setLoadingStep(4);
-        setLoadingMessage("Finalizing interactive assets...");
+        setLoadingMessage("Finalizing UI...");
 
         const newImage: GeneratedImage = {
             id: Date.now().toString(),

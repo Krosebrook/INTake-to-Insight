@@ -5,12 +5,13 @@
 import React, { useState, useEffect, Suspense, ReactNode, ErrorInfo } from 'react';
 import Layout from './components/Layout';
 import { CreditCard, AlertTriangle, Loader2 } from 'lucide-react';
+import { db } from './lib/db'; // Import DB
 
 // Lazy Load Core Components
 const Dashboard = React.lazy(() => import('./components/Dashboard'));
 const Editor = React.lazy(() => import('./components/Editor'));
 const Settings = React.lazy(() => import('./components/Settings'));
-const IntroScreen = React.lazy(() => import('./components/IntroScreen'));
+const OnboardingWizard = React.lazy(() => import('./components/OnboardingWizard')); // Lazy load wizard
 
 // Error Boundary for Suspense
 interface ErrorBoundaryProps {
@@ -21,7 +22,6 @@ interface ErrorBoundaryState {
   hasError: boolean;
 }
 
-// Fix: Explicitly extending React.Component to ensure types are correct
 class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
   constructor(props: ErrorBoundaryProps) {
     super(props);
@@ -60,27 +60,35 @@ const LoadingFallback = () => (
 );
 
 const App: React.FC = () => {
-  const [showIntro, setShowIntro] = useState(true);
+  const [needsOnboarding, setNeedsOnboarding] = useState<boolean | null>(null); // Null = loading check
   const [activeView, setActiveView] = useState<'dashboard' | 'editor' | 'settings'>('dashboard');
   const [currentProjectId, setCurrentProjectId] = useState<string | null>(null);
   
-  // Initialize theme state checking LocalStorage first, then System Preference
   const [isDarkMode, setIsDarkMode] = useState(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('theme');
-      if (saved) {
-        return saved === 'dark';
-      }
-      // Fallback to system preference
-      if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
-        return true;
-      }
+      if (saved) return saved === 'dark';
+      if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) return true;
     }
-    return true; // Default to dark mode
+    return true; 
   });
 
   const [hasApiKey, setHasApiKey] = useState(false);
   const [checkingKey, setCheckingKey] = useState(true);
+
+  // Check if User exists in DB to determine onboarding status
+  useEffect(() => {
+    const checkUser = async () => {
+        try {
+            const user = await db.getCurrentUser();
+            setNeedsOnboarding(!user); // If no user, we need onboarding
+        } catch (e) {
+            console.error(e);
+            setNeedsOnboarding(true); // Fallback safe
+        }
+    };
+    checkUser();
+  }, []);
 
   useEffect(() => {
     localStorage.setItem('theme', isDarkMode ? 'dark' : 'light');
@@ -139,10 +147,13 @@ const App: React.FC = () => {
       );
   }
 
-  if (showIntro) {
+  // Show nothing while checking DB state to prevent flicker
+  if (needsOnboarding === null) return <LoadingFallback />;
+
+  if (needsOnboarding) {
       return (
-        <Suspense fallback={null}>
-            <IntroScreen onComplete={() => setShowIntro(false)} />
+        <Suspense fallback={<LoadingFallback />}>
+            <OnboardingWizard onComplete={() => setNeedsOnboarding(false)} />
         </Suspense>
       );
   }

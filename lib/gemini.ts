@@ -146,11 +146,10 @@ export async function generateDashboardImage(prompt: string, style: VisualStyle,
        - Use CSS within <style> tags inside the SVG.
        - Add ':hover' effects to buttons, sidebar links, and table rows (e.g., change opacity or fill).
        - Add 'cursor: pointer' to all interactive elements.
-    4. LAYOUT & GROUNDING:
-       - Create a full Sidebar with navigation links (Home, Analytics, Reports, Settings, Users).
-       - Create a Top Header with User Profile, Search Bar, and Notifications.
-       - Main Content Area must contain REALISTIC data visualizations (Bar, Line, Pie charts) based on the Prompt.
-       - Use <defs> for gradients/shadows to match the "${style}" aesthetic.
+       - Create a "fake" navigation sidebar with at least 5 links (Dashboard, Analytics, Users, Settings, Reports) to mimic a real app.
+    4. DATA GROUNDING (CRITICAL):
+       - If "REAL DATA TO VISUALIZE" is provided in the prompt, you MUST use the exact numbers/labels from it.
+       - Do not use "Lorem Ipsum". Use realistic business terminology matching the context.
     5. No markdown formatting. Return raw SVG code.
   `;
 

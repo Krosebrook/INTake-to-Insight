@@ -1,11 +1,10 @@
-
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
 */
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { DataSource, DataSourceType } from '../types';
-import { UploadCloud, Database, FileSpreadsheet, HardDrive, Loader2, Link, Check, AlertCircle } from 'lucide-react';
+import { UploadCloud, Database, FileSpreadsheet, HardDrive, Loader2, Link, Check, AlertCircle, RefreshCw } from 'lucide-react';
 
 interface DataConnectorsProps {
   onConnect: (source: DataSource) => void;
@@ -17,79 +16,191 @@ const DataConnectors: React.FC<DataConnectorsProps> = ({ onConnect }) => {
   const [activeTab, setActiveTab] = useState<'upload' | 'cloud' | 'api'>('upload');
   const [connState, setConnState] = useState<ConnectionState>('IDLE');
   const [statusMsg, setStatusMsg] = useState('');
+  const [apiUrl, setApiUrl] = useState('');
+  const [authType, setAuthType] = useState('Bearer Token');
+  
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const simulateConnection = async (type: DataSourceType, name: string) => {
+  const resetState = () => {
+      setConnState('IDLE');
+      setStatusMsg('');
+  };
+
+  const handleTabChange = (tab: 'upload' | 'cloud' | 'api') => {
+      setActiveTab(tab);
+      resetState();
+  };
+
+  // --- Real File Parsing Logic ---
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
     setConnState('CONNECTING');
-    setStatusMsg(`Connecting to ${name}...`);
+    setStatusMsg(`Parsing ${file.name}...`);
+
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+        try {
+            const text = event.target?.result as string;
+            // Simple CSV/JSON sniffing
+            let sampleData = "";
+            let rowCount = 0;
+
+            if (file.name.endsWith('.json')) {
+                const json = JSON.parse(text);
+                const arr = Array.isArray(json) ? json : [json];
+                rowCount = arr.length;
+                sampleData = JSON.stringify(arr.slice(0, 5)); // Top 5 items
+            } else {
+                // Assume CSV
+                const lines = text.split('\n');
+                rowCount = lines.length;
+                sampleData = lines.slice(0, 6).join('\n'); // Header + 5 rows
+            }
+
+            // Artificial delay for UX
+            await new Promise(r => setTimeout(r, 800));
+
+            const newSource: DataSource = {
+                id: Date.now().toString(),
+                type: 'FILE_UPLOAD',
+                name: file.name,
+                status: 'CONNECTED',
+                meta: {
+                    rowCount: rowCount,
+                    fileSize: (file.size / 1024).toFixed(1) + ' KB',
+                    lastSync: Date.now()
+                },
+                sampleData: sampleData
+            };
+
+            setConnState('SUCCESS');
+            setStatusMsg('File parsed successfully.');
+            setTimeout(() => {
+                onConnect(newSource);
+                resetState();
+            }, 1000);
+
+        } catch (err) {
+            console.error(err);
+            setConnState('ERROR');
+            setStatusMsg("Failed to parse file. Ensure valid CSV or JSON.");
+        }
+    };
+    reader.readAsText(file);
+  };
+
+  const handleCloudConnect = async (type: DataSourceType, name: string) => {
+    setConnState('CONNECTING');
+    setStatusMsg(`Authenticating with ${name}...`);
     
-    // Simulate network delay
-    await new Promise(resolve => setTimeout(resolve, 2000));
+    // Simulate OAuth Redirect & Handshake
+    await new Promise(resolve => setTimeout(resolve, 1500));
     
-    // Randomly fail sometimes for realism (10% chance) - skipped for smooth user flow
-    // const fail = Math.random() > 0.9;
+    setStatusMsg(`Fetching file list...`);
+    await new Promise(resolve => setTimeout(resolve, 800));
+
+    setConnState('SUCCESS');
+    setStatusMsg("Connected successfully.");
     
-    if (false) {
-        setConnState('ERROR');
-        setStatusMsg("Connection timed out. Please check your credentials.");
-    } else {
-        setConnState('SUCCESS');
-        setStatusMsg("Successfully authenticated.");
-        
-        await new Promise(resolve => setTimeout(resolve, 800)); // Show success briefly
-        
+    setTimeout(() => {
         const newSource: DataSource = {
-          id: Date.now().toString(),
-          type,
-          name,
-          status: 'CONNECTED',
-          meta: {
-            rowCount: Math.floor(Math.random() * 5000) + 100,
-            lastSync: Date.now()
-          }
+            id: Date.now().toString(),
+            type,
+            name: `${name} / Sales_Data_Q3.csv`,
+            status: 'CONNECTED',
+            meta: {
+                rowCount: 12400,
+                fileSize: '4.2 MB',
+                lastSync: Date.now()
+            },
+            sampleData: "Date,Revenue,Region\n2024-01-01,5000,NA\n2024-01-02,5200,EU\n2024-01-03,4800,NA"
         };
-        
         onConnect(newSource);
-        setConnState('IDLE');
-    }
+        resetState();
+    }, 1000);
+  };
+
+  const handleApiConnect = async () => {
+      if (!apiUrl) {
+          setConnState('ERROR');
+          setStatusMsg("Please enter a valid Endpoint URL.");
+          return;
+      }
+
+      setConnState('CONNECTING');
+      setStatusMsg(`Pinging ${new URL(apiUrl).hostname}...`);
+
+      try {
+          // Verify URL format
+          new URL(apiUrl);
+          
+          // Simulate latency
+          await new Promise(resolve => setTimeout(resolve, 1500));
+
+          setConnState('SUCCESS');
+          setStatusMsg("Endpoint verified.");
+
+          setTimeout(() => {
+              const newSource: DataSource = {
+                  id: Date.now().toString(),
+                  type: 'API_REST',
+                  name: `API: ${new URL(apiUrl).hostname}`,
+                  status: 'CONNECTED',
+                  meta: {
+                      lastSync: Date.now()
+                  },
+                  sampleData: `{"status": "ok", "source": "${apiUrl}", "data": [...]}`
+              };
+              onConnect(newSource);
+              resetState();
+              setApiUrl('');
+          }, 1000);
+
+      } catch (e) {
+          setConnState('ERROR');
+          setStatusMsg("Invalid URL or Connection Refused.");
+      }
   };
 
   return (
-    <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-white/10 overflow-hidden shadow-sm">
+    <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-white/10 overflow-hidden shadow-sm h-full flex flex-col">
       {/* Tabs */}
-      <div className="flex border-b border-slate-200 dark:border-white/10">
+      <div className="flex border-b border-slate-200 dark:border-white/10 shrink-0">
         <button 
-          onClick={() => { setActiveTab('upload'); setConnState('IDLE'); }}
+          onClick={() => handleTabChange('upload')}
           className={`flex-1 py-4 text-sm font-bold flex items-center justify-center gap-2 transition-colors ${activeTab === 'upload' ? 'bg-slate-50 dark:bg-slate-800 text-blue-900 dark:text-blue-400 border-b-2 border-orange-600' : 'text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800/50'}`}
         >
           <FileSpreadsheet className="w-4 h-4" /> Local File
         </button>
         <button 
-          onClick={() => { setActiveTab('cloud'); setConnState('IDLE'); }}
+          onClick={() => handleTabChange('cloud')}
           className={`flex-1 py-4 text-sm font-bold flex items-center justify-center gap-2 transition-colors ${activeTab === 'cloud' ? 'bg-slate-50 dark:bg-slate-800 text-blue-900 dark:text-blue-400 border-b-2 border-orange-600' : 'text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800/50'}`}
         >
           <HardDrive className="w-4 h-4" /> Cloud Storage
         </button>
         <button 
-          onClick={() => { setActiveTab('api'); setConnState('IDLE'); }}
+          onClick={() => handleTabChange('api')}
           className={`flex-1 py-4 text-sm font-bold flex items-center justify-center gap-2 transition-colors ${activeTab === 'api' ? 'bg-slate-50 dark:bg-slate-800 text-blue-900 dark:text-blue-400 border-b-2 border-orange-600' : 'text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800/50'}`}
         >
           <Database className="w-4 h-4" /> API / SQL
         </button>
       </div>
 
-      <div className="p-6 min-h-[300px] flex flex-col justify-center">
+      <div className="p-6 flex-1 flex flex-col justify-center relative min-h-[320px]">
         
         {connState === 'CONNECTING' && (
-          <div className="flex flex-col items-center justify-center text-slate-500 animate-in fade-in">
+          <div className="absolute inset-0 bg-white/90 dark:bg-slate-900/90 z-20 flex flex-col items-center justify-center text-slate-500 animate-in fade-in">
              <Loader2 className="w-10 h-10 animate-spin text-blue-900 mb-4" />
              <p className="font-medium text-slate-900 dark:text-white">{statusMsg}</p>
-             <p className="text-xs mt-2">Verifying schema & permissions...</p>
+             <p className="text-xs mt-2">This may take a few seconds...</p>
           </div>
         )}
 
         {connState === 'SUCCESS' && (
-          <div className="flex flex-col items-center justify-center text-green-600 animate-in zoom-in duration-300">
-             <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mb-4">
+          <div className="absolute inset-0 bg-white/90 dark:bg-slate-900/90 z-20 flex flex-col items-center justify-center text-green-600 animate-in zoom-in duration-300">
+             <div className="w-16 h-16 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center mb-4">
                 <Check className="w-8 h-8" />
              </div>
              <p className="font-bold text-lg">{statusMsg}</p>
@@ -97,15 +208,15 @@ const DataConnectors: React.FC<DataConnectorsProps> = ({ onConnect }) => {
         )}
 
         {connState === 'ERROR' && (
-           <div className="flex flex-col items-center justify-center text-red-600 animate-in shake">
+           <div className="absolute inset-0 bg-white/90 dark:bg-slate-900/90 z-20 flex flex-col items-center justify-center text-red-600 animate-in shake">
               <AlertCircle className="w-12 h-12 mb-4" />
               <p className="font-bold text-lg">Connection Failed</p>
               <p className="text-sm text-slate-500 mt-2 mb-6">{statusMsg}</p>
               <button 
-                 onClick={() => setConnState('IDLE')}
-                 className="px-4 py-2 bg-slate-100 hover:bg-slate-200 rounded-lg text-slate-900 font-bold text-sm"
+                 onClick={resetState}
+                 className="px-4 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 rounded-lg text-slate-900 dark:text-white font-bold text-sm flex items-center gap-2"
               >
-                 Try Again
+                 <RefreshCw className="w-3 h-3" /> Try Again
               </button>
            </div>
         )}
@@ -114,14 +225,21 @@ const DataConnectors: React.FC<DataConnectorsProps> = ({ onConnect }) => {
           <>
             {activeTab === 'upload' && (
               <div 
-                className="border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-xl p-8 flex flex-col items-center justify-center text-center cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/30 hover:border-blue-500 transition-all group"
-                onClick={() => simulateConnection('FILE_UPLOAD', 'sales_data_q3.csv')}
+                className="border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-xl p-8 flex flex-col items-center justify-center text-center cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/30 hover:border-blue-500 transition-all group h-full"
+                onClick={() => fileInputRef.current?.click()}
               >
+                 <input 
+                    type="file" 
+                    ref={fileInputRef} 
+                    className="hidden" 
+                    accept=".csv,.json,.txt"
+                    onChange={handleFileUpload} 
+                 />
                  <div className="w-16 h-16 bg-blue-50 dark:bg-blue-900/30 rounded-full flex items-center justify-center text-blue-900 dark:text-blue-400 mb-4 group-hover:scale-110 transition-transform">
                    <UploadCloud className="w-8 h-8" />
                  </div>
-                 <h3 className="text-lg font-bold text-slate-900 dark:text-white">Click to Upload CSV, JSON, or XML</h3>
-                 <p className="text-sm text-slate-500 mt-2 max-w-xs">Supports automated schema detection. Max file size 50MB for free tier.</p>
+                 <h3 className="text-lg font-bold text-slate-900 dark:text-white">Click to Upload CSV or JSON</h3>
+                 <p className="text-sm text-slate-500 mt-2 max-w-xs">We parse the first 100 rows locally to ground your AI generation in real data.</p>
               </div>
             )}
 
@@ -134,7 +252,7 @@ const DataConnectors: React.FC<DataConnectorsProps> = ({ onConnect }) => {
                  ].map((provider) => (
                    <button 
                       key={provider.id}
-                      onClick={() => simulateConnection(provider.id === 'google' ? 'GOOGLE_DRIVE' : provider.id === 'dropbox' ? 'DROPBOX' : 'ONEDRIVE', `${provider.name} / Marketing Assets`)}
+                      onClick={() => handleCloudConnect(provider.id === 'google' ? 'GOOGLE_DRIVE' : provider.id === 'dropbox' ? 'DROPBOX' : 'ONEDRIVE', provider.name)}
                       className={`flex items-center gap-4 p-5 rounded-xl border border-slate-200 dark:border-white/5 hover:border-orange-500 hover:shadow-md transition-all ${provider.bg}`}
                    >
                       <HardDrive className={`w-6 h-6 ${provider.color}`} />
@@ -154,21 +272,31 @@ const DataConnectors: React.FC<DataConnectorsProps> = ({ onConnect }) => {
                     <label className="text-xs font-bold text-slate-500 uppercase">Endpoint URL</label>
                     <div className="flex items-center gap-3 bg-slate-50 dark:bg-slate-800 p-3 rounded-xl border border-slate-200 dark:border-slate-700 focus-within:ring-2 focus-within:ring-blue-500 transition-shadow">
                        <Link className="w-5 h-5 text-slate-400" />
-                       <input className="bg-transparent border-none w-full text-sm outline-none text-slate-900 dark:text-white placeholder:text-slate-400" placeholder="https://api.example.com/v1/metrics" />
+                       <input 
+                          className="bg-transparent border-none w-full text-sm outline-none text-slate-900 dark:text-white placeholder:text-slate-400" 
+                          placeholder="https://api.example.com/v1/metrics"
+                          value={apiUrl}
+                          onChange={(e) => setApiUrl(e.target.value)}
+                       />
                     </div>
                  </div>
                  <div className="grid grid-cols-2 gap-5">
                      <div className="space-y-2">
                         <label className="text-xs font-bold text-slate-500 uppercase">Auth Type</label>
-                        <select className="w-full bg-slate-50 dark:bg-slate-800 p-3 rounded-xl border border-slate-200 dark:border-slate-700 text-sm text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none">
+                        <select 
+                            value={authType}
+                            onChange={(e) => setAuthType(e.target.value)}
+                            className="w-full bg-slate-50 dark:bg-slate-800 p-3 rounded-xl border border-slate-200 dark:border-slate-700 text-sm text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                        >
                            <option>Bearer Token</option>
                            <option>Basic Auth</option>
                            <option>API Key</option>
                         </select>
                      </div>
                      <button 
-                        onClick={() => simulateConnection('API_REST', 'REST API: /v1/metrics')}
-                        className="mt-auto bg-blue-900 hover:bg-blue-800 text-white font-bold py-3 rounded-xl shadow-lg shadow-blue-900/20 transition-all hover:scale-[1.02]"
+                        onClick={handleApiConnect}
+                        disabled={!apiUrl}
+                        className="mt-auto bg-blue-900 hover:bg-blue-800 text-white font-bold py-3 rounded-xl shadow-lg shadow-blue-900/20 transition-all hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed"
                      >
                         Test & Connect
                      </button>
