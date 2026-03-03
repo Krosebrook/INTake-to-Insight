@@ -4,9 +4,10 @@
  * SPDX-License-Identifier: Apache-2.0
 */
 import React, { useEffect, useState } from 'react';
-import { Project } from '../types';
+import { Project, DataSource } from '../types';
 import { db } from '../lib/db';
 import { Plus, Search, Trash2 } from 'lucide-react';
+import ResearchBar from './ResearchBar';
 
 interface DashboardProps {
   onCreateNew: () => void;
@@ -40,6 +41,33 @@ const Dashboard: React.FC<DashboardProps> = ({ onCreateNew, onOpenProject }) => 
     }
   };
 
+  const handleGenerateVisuals = async (topic: string, summary: string) => {
+    const newProjectId = Date.now().toString();
+    const researchDataSource: DataSource = {
+      id: Date.now().toString(),
+      name: `Research: ${topic}`,
+      type: 'API',
+      status: 'CONNECTED',
+      sampleData: summary
+    };
+
+    const newProject: Project = {
+      id: newProjectId,
+      title: topic,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      prompt: `Create a dashboard visualizing the key insights from this research: ${topic}`,
+      level: 'Executive Summary',
+      style: 'Modern SaaS',
+      dataSources: [researchDataSource],
+      canvasState: { annotations: [], comments: [] },
+      history: []
+    };
+
+    await db.createProject(newProject);
+    onOpenProject(newProjectId);
+  };
+
   return (
     <div className="flex-1 overflow-auto p-6 md:p-10 animate-in fade-in duration-500">
       
@@ -57,6 +85,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onCreateNew, onOpenProject }) => 
             <span>New Project</span>
         </button>
       </div>
+
+      <ResearchBar onGenerateVisuals={handleGenerateVisuals} />
 
       {/* Grid */}
       {isLoading ? (

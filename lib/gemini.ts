@@ -280,3 +280,19 @@ export async function editDashboardImage(imageBase64: string, instruction: strin
   }
   throw new Error("Edit failed");
 }
+
+export async function researchTopic(topic: string, audience: string): Promise<{ summary: string, sources: any[] }> {
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const response = await ai.models.generateContent({
+    model: "gemini-3-pro-preview",
+    contents: `Research the following topic: "${topic}". Provide a comprehensive summary tailored for this audience: "${audience}". Include key statistics, trends, and actionable insights.`,
+    config: {
+      tools: [{ googleSearch: {} }],
+    },
+  });
+
+  const text = response.text || "No summary available.";
+  const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
+  
+  return { summary: text, sources: chunks };
+}
