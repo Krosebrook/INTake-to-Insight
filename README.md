@@ -102,6 +102,97 @@ This application is designed as a **Local-First** Single Page Application (SPA),
 
 ---
 
+---
+
+## 🚀 Deployment
+
+This is a **pure static SPA** (Vite build → `dist/`). It deploys identically on both Vercel and Cloudflare Pages. No server or edge functions are required.
+
+### Prerequisites
+
+Set your `GEMINI_API_KEY` as an environment variable **in the platform UI** before deploying. It is embedded in the client bundle at build time by Vite.
+
+> ⚠️ Restrict the API key to your deployed domain(s) in the [Google Cloud Console](https://console.cloud.google.com/apis/credentials) to prevent unauthorized use.
+
+Copy `.env.example` to `.env` for local development:
+```bash
+cp .env.example .env
+# then edit .env and fill in GEMINI_API_KEY
+```
+
+---
+
+### Vercel
+
+| Setting          | Value                           |
+|------------------|---------------------------------|
+| Framework Preset | Vite                            |
+| Build Command    | `npm run build`                 |
+| Output Directory | `dist`                          |
+| Install Command  | `npm install`                   |
+| Node.js Version  | ≥20.19.x (or 22+)               |
+| Env Variable     | `GEMINI_API_KEY` = `<your key>` |
+
+**Deploy via CLI:**
+```bash
+npx vercel --prod
+```
+
+Security headers and SPA routing are configured in `vercel.json` (already in repo).
+
+---
+
+### Cloudflare Pages
+
+| Setting            | Value                           |
+|--------------------|---------------------------------|
+| Framework Preset   | None (Vite)                     |
+| Build Command      | `npm run build`                 |
+| Build Output Dir   | `dist`                          |
+| Root Directory     | `/` (repo root)                 |
+| Node.js Version    | ≥20.19.x (or 22+)               |
+| Env Variable       | `GEMINI_API_KEY` = `<your key>` |
+
+**Deploy via CLI:**
+```bash
+npx wrangler pages deploy dist --project-name=intake-to-insight
+```
+
+SPA routing (`public/_redirects`) and security headers (`public/_headers`) are copied into `dist/` automatically by Vite during the build.
+
+---
+
+### Local Smoke Test
+
+Verify both build and preview work before pushing:
+```bash
+# 1. Install deps
+npm install
+
+# 2. Build + preview (serves on http://localhost:4173 by default)
+npm run smoke
+
+# 3. In a second terminal, confirm health endpoint responds:
+curl http://localhost:4173/health.json
+# Expected: {"status":"ok","app":"intake-to-insight"}
+```
+
+### Deployment Checklist
+
+- [ ] `GEMINI_API_KEY` set in platform environment variables
+- [ ] API key restricted to deployed domain in Google Cloud Console
+- [ ] `npm run build` completes without errors locally
+- [ ] `/health.json` returns `{"status":"ok"}` after deploy
+- [ ] App loads and Gemini API calls succeed in production
+
+### Rollback Plan
+
+Both platforms retain all previous deployments:
+- **Vercel**: Deployments tab → select previous deployment → "Promote to Production"
+- **Cloudflare Pages**: Pages project → Deployments tab → "Rollback to this deployment"
+
+---
+
 ## 🤝 Contributing
 
 We follow a strict "Accessibility First" and "Type Safe" development philosophy. Please ensure all PRs pass linting and include semantic HTML.
