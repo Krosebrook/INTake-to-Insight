@@ -3,9 +3,9 @@
 
 ## 1. Executive Summary
 
-InfoGenius Vision currently operates as a **Client-Side, Local-First Single Page Application (SPA)**. 
+INTake to Insight currently operates as a **Client-Side, Local-First Single Page Application (SPA)**. 
 
-Unlike traditional web apps that rely heavily on a backend server for every interaction, InfoGenius pushes logic and persistence to the browser edge. This ensures immediate responsiveness, offline capability, and enhanced privacy for rapid prototyping.
+Unlike traditional web apps that rely heavily on a backend server for every interaction, INTake to Insight pushes logic and persistence to the browser edge. This ensures immediate responsiveness, offline capability, and enhanced privacy for rapid prototyping.
 
 *   **Current State:** React SPA + IndexedDB + Direct AI SDK.
 *   **Future State:** Next.js BFF + PostgreSQL + S3 (See [ROADMAP.md](./ROADMAP.md)).

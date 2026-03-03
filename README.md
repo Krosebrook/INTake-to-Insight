@@ -1,11 +1,11 @@
 
-# InfoGenius Vision
+# INTake to Insight
 
 ![Status](https://img.shields.io/badge/Status-Beta-orange)
 ![Tech](https://img.shields.io/badge/Stack-React_|_TypeScript_|_Tailwind-blue)
 ![AI](https://img.shields.io/badge/AI-Gemini_3_Pro-purple)
 
-**InfoGenius Vision** is an enterprise-grade visual intelligence platform. It leverages Google's Gemini 3 Pro model to transform abstract business objectives and raw data sources into high-fidelity, editable dashboard mockups and infographics.
+**INTake to Insight** is an enterprise-grade visual intelligence platform. It leverages Google's Gemini 3 Pro model to transform abstract business objectives and raw data sources into high-fidelity, editable dashboard mockups and infographics.
 
 This application is designed as a **Local-First** Single Page Application (SPA), ensuring data privacy and offline capability by storing sensitive project data within the user's browser (IndexedDB) rather than a central cloud database during the prototype phase.
 

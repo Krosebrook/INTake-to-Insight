@@ -51,7 +51,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onCreateNew, onOpenProject }) => 
         </div>
         <button 
             onClick={onCreateNew}
-            className="flex items-center gap-2 bg-blue-900 hover:bg-blue-800 text-white px-5 py-3 rounded-xl font-bold shadow-lg shadow-blue-900/20 transition-all hover:scale-[1.02]"
+            className="flex items-center gap-2 bg-brand-blue hover:bg-brand-blue-dark text-white px-5 py-3 rounded-xl font-bold shadow-lg shadow-brand-blue/20 transition-all hover:scale-[1.02]"
         >
             <Plus className="w-5 h-5" />
             <span>New Project</span>
@@ -68,19 +68,19 @@ const Dashboard: React.FC<DashboardProps> = ({ onCreateNew, onOpenProject }) => 
              </div>
              <h3 className="text-xl font-bold text-slate-700 dark:text-slate-300">No projects yet</h3>
              <p className="text-slate-500 max-w-sm mt-2 mb-6">Start researching a topic to generate your first infographic.</p>
-             <button onClick={onCreateNew} className="text-orange-600 font-bold hover:underline">Create Project</button>
+             <button onClick={onCreateNew} className="text-brand-orange font-bold hover:underline">Create Project</button>
          </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {/* Create New Card (visual cue) */}
             <div 
                 onClick={onCreateNew}
-                className="group cursor-pointer border-2 border-dashed border-slate-200 dark:border-white/10 rounded-2xl p-6 flex flex-col items-center justify-center gap-4 hover:border-orange-500/50 hover:bg-orange-50/50 dark:hover:bg-orange-900/10 transition-all min-h-[280px]"
+                className="group cursor-pointer border-2 border-dashed border-slate-200 dark:border-white/10 rounded-2xl p-6 flex flex-col items-center justify-center gap-4 hover:border-brand-orange/50 hover:bg-brand-orange/5 dark:hover:bg-brand-orange/10 transition-all min-h-[280px]"
             >
-                <div className="w-12 h-12 rounded-full bg-slate-100 dark:bg-slate-800 group-hover:bg-orange-100 dark:group-hover:bg-orange-900/50 text-slate-400 group-hover:text-orange-600 transition-colors flex items-center justify-center">
+                <div className="w-12 h-12 rounded-full bg-slate-100 dark:bg-slate-800 group-hover:bg-brand-orange/10 dark:group-hover:bg-brand-orange/20 text-slate-400 group-hover:text-brand-orange transition-colors flex items-center justify-center">
                     <Plus className="w-6 h-6" />
                 </div>
-                <span className="font-bold text-slate-600 dark:text-slate-400 group-hover:text-orange-700 dark:group-hover:text-orange-400">Create New</span>
+                <span className="font-bold text-slate-600 dark:text-slate-400 group-hover:text-brand-orange-dark dark:group-hover:text-brand-orange">Create New</span>
             </div>
 
             {projects.map(project => (
@@ -103,7 +103,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onCreateNew, onOpenProject }) => 
                     <div className="p-4 flex-1 flex flex-col">
                         <h3 className="font-bold text-slate-900 dark:text-white truncate mb-1">{project.title}</h3>
                         <div className="flex items-center gap-2 text-xs text-slate-500 mb-4">
-                            <span className="bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded text-blue-900 dark:text-blue-300 font-medium">{project.level}</span>
+                            <span className="bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded text-brand-blue dark:text-brand-blue font-medium">{project.level}</span>
                             <span>•</span>
                             <span>{new Date(project.updatedAt).toLocaleDateString()}</span>
                         </div>

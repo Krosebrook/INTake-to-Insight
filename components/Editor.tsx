@@ -290,7 +290,7 @@ const Editor: React.FC<EditorProps> = ({ projectId, onBack }) => {
              <button 
                 onClick={handleManualSave}
                 disabled={isSaving}
-                className="flex items-center gap-2 px-4 py-2 bg-blue-900 hover:bg-blue-800 text-white text-sm font-bold rounded-lg shadow-sm transition-colors disabled:opacity-50"
+                className="flex items-center gap-2 px-4 py-2 bg-brand-blue hover:bg-brand-blue-dark text-white text-sm font-bold rounded-lg shadow-sm transition-colors disabled:opacity-50"
              >
                 <Save className="w-4 h-4" />
                 {isSaving ? 'Saving...' : 'Save Version'}
@@ -310,7 +310,7 @@ const Editor: React.FC<EditorProps> = ({ projectId, onBack }) => {
                           <h3 className="text-xs font-bold text-slate-500 uppercase flex items-center gap-2">
                               <Database className="w-4 h-4" /> Data Sources
                           </h3>
-                          <button onClick={() => setShowDataModal(true)} className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded text-blue-600 dark:text-blue-400">
+                          <button onClick={() => setShowDataModal(true)} className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded text-brand-blue dark:text-brand-orange">
                               <Plus className="w-4 h-4" />
                           </button>
                       </div>
@@ -321,7 +321,7 @@ const Editor: React.FC<EditorProps> = ({ projectId, onBack }) => {
                             className="border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-lg p-4 text-center cursor-pointer hover:border-blue-500/50 transition-colors"
                           >
                               <p className="text-xs text-slate-400">No data connected</p>
-                              <span className="text-xs font-bold text-blue-600 dark:text-blue-400 mt-1 block">Connect Data</span>
+                              <span className="text-xs font-bold text-brand-blue dark:text-brand-orange mt-1 block">Connect Data</span>
                           </div>
                       ) : (
                           <div className="space-y-2">
@@ -359,7 +359,7 @@ const Editor: React.FC<EditorProps> = ({ projectId, onBack }) => {
                                       <button 
                                           key={l}
                                           onClick={() => setLevel(l as any)}
-                                          className={`py-1.5 px-2 rounded text-[10px] font-bold border transition-all truncate ${level === l ? 'bg-blue-50 dark:bg-blue-900/30 border-blue-900 text-blue-900 dark:text-blue-300' : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}
+                                          className={`py-1.5 px-2 rounded text-[10px] font-bold border transition-all truncate ${level === l ? 'bg-brand-blue/10 dark:bg-brand-blue/20 border-brand-blue text-brand-blue dark:text-brand-blue' : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}
                                           title={l}
                                       >
                                           {l.split(' ')[0]}
@@ -425,7 +425,7 @@ const Editor: React.FC<EditorProps> = ({ projectId, onBack }) => {
                       <button 
                           onClick={handleGenerate}
                           disabled={isLoading || !objective}
-                          className="w-full mt-3 bg-blue-900 hover:bg-blue-800 text-white font-bold py-3 rounded-xl transition-all shadow-lg shadow-blue-900/20 disabled:opacity-50 flex items-center justify-center gap-2"
+                          className="w-full mt-3 bg-brand-blue hover:bg-brand-blue-dark text-white font-bold py-3 rounded-xl transition-all shadow-lg shadow-brand-blue/20 disabled:opacity-50 flex items-center justify-center gap-2"
                       >
                           {isLoading ? <div className="animate-spin w-4 h-4 border-2 border-white/30 border-t-white rounded-full"></div> : <Play className="w-4 h-4 fill-current" />}
                           {isLoading ? 'Generating...' : history.length > 0 ? 'Re-Generate' : 'Generate'}

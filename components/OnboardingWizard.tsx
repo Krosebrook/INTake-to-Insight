@@ -105,7 +105,7 @@ const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ onComplete }) => {
                {React.createElement(STEPS[currentStep].icon, { size: 24 })}
              </div>
              <h2 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">
-               {currentStep === 0 && "Welcome to InfoGenius"}
+               {currentStep === 0 && "Welcome to INTake to Insight"}
                {currentStep === 1 && "Define your Brand"}
                {currentStep === 2 && "Setting up Workspace"}
              </h2>

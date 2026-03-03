@@ -1,6 +1,6 @@
-# InfoGenius Vision - Strategic Roadmap
+# INTake to Insight - Strategic Roadmap
 
-This document outlines the development phases required to transition InfoGenius Vision from a client-side prototype to a persistent, enterprise-grade internal tool.
+This document outlines the development phases required to transition INTake to Insight from a client-side prototype to a persistent, enterprise-grade internal tool.
 
 ## 🟢 Phase 1: Interactive MVP (Current Status)
 **Goal:** Enhance the frontend user experience to support complex interactions and enterprise customization.

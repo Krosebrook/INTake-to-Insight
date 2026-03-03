@@ -53,17 +53,17 @@ const IntroScreen: React.FC<IntroScreenProps> = ({ onComplete }) => {
                 {/* The "I" constructed to match the logo (Orange Dot, Blue Stem) */}
                 <div className="flex flex-col items-center justify-end h-[60px] md:h-[110px] w-[14px] md:w-[26px] pb-[6px] md:pb-[10px]">
                      {/* Dot */}
-                     <div className="w-[14px] h-[14px] md:w-[26px] md:h-[26px] bg-[#e65c00] rounded-full mb-2 md:mb-4 shadow-sm"></div>
+                     <div className="w-[14px] h-[14px] md:w-[26px] md:h-[26px] bg-brand-orange rounded-full mb-2 md:mb-4 shadow-sm"></div>
                      {/* Stem */}
-                     <div className="w-full flex-1 bg-[#1e3a8a] rounded-sm"></div>
+                     <div className="w-full flex-1 bg-brand-blue rounded-sm"></div>
                 </div>
 
                 {/* The "NT" Text */}
                 <div className="flex items-baseline leading-none">
-                    <span className="text-[60px] md:text-[120px] font-bold text-[#1e3a8a] leading-none tracking-tighter">
+                    <span className="text-[60px] md:text-[120px] font-bold text-brand-blue leading-none tracking-tighter">
                         NT
                     </span>
-                    <span className="text-xs md:text-2xl font-bold text-[#1e3a8a] mb-auto ml-1 -mt-1 md:-mt-4 transform -translate-y-full">
+                    <span className="text-xs md:text-2xl font-bold text-brand-blue mb-auto ml-1 -mt-1 md:-mt-4 transform -translate-y-full">
                         TM
                     </span>
                 </div>
@@ -78,15 +78,15 @@ const IntroScreen: React.FC<IntroScreenProps> = ({ onComplete }) => {
 
             {/* Tagline */}
             <div className={`mt-2 md:mt-4 flex flex-col md:flex-row items-start md:items-baseline gap-1 md:gap-3 text-lg md:text-3xl font-sans transition-all duration-1000 ease-out delay-200 ${phase >= 2 ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-8'}`}>
-                <span className="font-semibold text-[#1e3a8a]">Our Purpose is</span>
-                <span className="font-bold text-[#e65c00]">YOUR Business</span>
+                <span className="font-semibold text-brand-blue">Our Purpose is</span>
+                <span className="font-bold text-brand-orange">YOUR Business</span>
             </div>
 
             {/* CTA Button */}
             <div className={`mt-12 md:mt-16 w-full flex justify-center md:justify-start transition-all duration-1000 ease-out delay-500 ${phase >= 4 ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
                 <button 
                    onClick={onComplete}
-                   className="group relative px-6 py-3 bg-[#1e3a8a] text-white rounded-lg shadow-xl hover:shadow-2xl hover:bg-[#152865] transition-all overflow-hidden"
+                   className="group relative px-6 py-3 bg-brand-blue text-white rounded-lg shadow-xl hover:shadow-2xl hover:bg-brand-blue-dark transition-all overflow-hidden"
                 >
                    <div className="absolute inset-0 w-full h-full bg-gradient-to-r from-transparent via-white/10 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700"></div>
                    <div className="flex items-center gap-3 relative z-10">

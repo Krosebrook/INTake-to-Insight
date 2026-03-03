@@ -43,10 +43,10 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, onNavigate, isDar
            ) : (
               <div className="h-8 w-8 flex items-end justify-center pb-1 gap-[2px]">
                 <div className="flex flex-col items-center justify-end h-full w-[6px]">
-                    <div className="w-[6px] h-[6px] rounded-full bg-orange-600 mb-1"></div>
-                    <div className="w-full h-4 bg-blue-900 dark:bg-blue-700 rounded-sm"></div>
+                    <div className="w-[6px] h-[6px] rounded-full bg-brand-orange mb-1"></div>
+                    <div className="w-full h-4 bg-brand-blue dark:bg-brand-blue rounded-sm"></div>
                 </div>
-                <span className="text-xl font-bold text-blue-900 dark:text-blue-500 leading-none -mb-[1px]">NT</span>
+                <span className="text-xl font-bold text-brand-blue dark:text-brand-blue leading-none -mb-[1px]">NT</span>
               </div>
            )}
            <span className="hidden md:block font-display font-bold text-lg tracking-tight text-slate-900 dark:text-white">
@@ -86,12 +86,12 @@ const Layout: React.FC<LayoutProps> = ({ children, activeView, onNavigate, isDar
                 <span className="hidden md:block text-sm">Theme</span>
             </button>
             <div className="flex items-center gap-3 px-3 py-2">
-                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-900 to-blue-700 flex items-center justify-center text-white font-bold text-xs ring-2 ring-white dark:ring-slate-800">
+                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-brand-blue to-brand-blue-dark flex items-center justify-center text-white font-bold text-xs ring-2 ring-white dark:ring-slate-800">
                     JD
                 </div>
                 <div className="hidden md:block overflow-hidden">
                     <p className="text-sm font-bold truncate text-slate-900 dark:text-slate-200">John Doe</p>
-                    <p className="text-[10px] text-orange-600 dark:text-orange-400 font-bold uppercase">Enterprise Admin</p>
+                    <p className="text-[10px] text-brand-orange dark:text-brand-orange font-bold uppercase">Enterprise Admin</p>
                 </div>
             </div>
         </div>

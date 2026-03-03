@@ -23,9 +23,12 @@ interface ErrorBoundaryState {
 }
 
 class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  props: ErrorBoundaryProps;
+  state: ErrorBoundaryState = { hasError: false };
+
   constructor(props: ErrorBoundaryProps) {
     super(props);
-    this.state = { hasError: false };
+    this.props = props;
   }
 
   static getDerivedStateFromError(_: Error): ErrorBoundaryState {
@@ -43,7 +46,7 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
     if (hasError) {
       return (
         <div className="flex flex-col items-center justify-center h-full text-slate-500 p-8">
-          <AlertTriangle className="w-12 h-12 text-orange-600 mb-4" />
+          <AlertTriangle className="w-12 h-12 text-brand-orange mb-4" />
           <h3 className="text-xl font-bold">Component Failed to Load</h3>
           <p>Please refresh the application.</p>
         </div>
@@ -55,7 +58,7 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
 
 const LoadingFallback = () => (
   <div className="flex items-center justify-center h-full w-full">
-    <Loader2 className="w-8 h-8 text-blue-900 animate-spin" />
+    <Loader2 className="w-8 h-8 text-brand-blue animate-spin" />
   </div>
 );
 
@@ -132,16 +135,16 @@ const App: React.FC = () => {
   if (!checkingKey && !hasApiKey) {
       return (
         <div className="fixed inset-0 bg-slate-950 flex items-center justify-center p-4">
-            <div className="bg-white dark:bg-slate-900 max-w-md w-full p-8 rounded-2xl shadow-2xl border-2 border-orange-500/50 text-center">
-                <div className="w-16 h-16 bg-orange-100 dark:bg-orange-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <CreditCard className="w-8 h-8 text-orange-600" />
+            <div className="bg-white dark:bg-slate-900 max-w-md w-full p-8 rounded-2xl shadow-2xl border-2 border-brand-orange/50 text-center">
+                <div className="w-16 h-16 bg-brand-orange/10 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <CreditCard className="w-8 h-8 text-brand-orange" />
                 </div>
                 <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">Paid API Key Required</h2>
                 <p className="text-slate-500 mb-6 text-sm">
                   Gemini 3 Pro requires a billed Google Cloud Project. 
-                  Refer to the <a href="https://ai.google.dev/gemini-api/docs/billing" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">billing documentation</a>.
+                  Refer to the <a href="https://ai.google.dev/gemini-api/docs/billing" target="_blank" rel="noopener noreferrer" className="text-brand-blue hover:underline">billing documentation</a>.
                 </p>
-                <button onClick={handleSelectKey} className="w-full py-3 bg-blue-900 hover:bg-blue-800 text-white rounded-xl font-bold">Select API Key</button>
+                <button onClick={handleSelectKey} className="w-full py-3 bg-brand-blue hover:bg-brand-blue-dark text-white rounded-xl font-bold">Select API Key</button>
             </div>
         </div>
       );

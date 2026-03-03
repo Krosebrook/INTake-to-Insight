@@ -1,7 +1,7 @@
 
 # Developer Best Practices
 
-This document outlines the engineering standards, UX patterns, and security protocols for the InfoGenius Vision codebase. All contributions must adhere to these guidelines to ensure maintainability and accessibility.
+This document outlines the engineering standards, UX patterns, and security protocols for the INTake to Insight codebase. All contributions must adhere to these guidelines to ensure maintainability and accessibility.
 
 ---
 

@@ -518,7 +518,7 @@ const Settings: React.FC = () => {
                         <section className="space-y-8 animate-in slide-in-from-bottom-2 duration-300">
                             <div>
                                 <h2 className="text-2xl font-bold text-slate-900 dark:text-white">Integrations</h2>
-                                <p className="text-slate-500">Connect InfoGenius with your existing enterprise toolchain for automated data flows.</p>
+                                <p className="text-slate-500">Connect INTake to Insight with your existing enterprise toolchain for automated data flows.</p>
                             </div>
 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

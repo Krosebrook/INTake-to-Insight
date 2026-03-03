@@ -5,13 +5,25 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#0f172a" />
-    <meta name="description" content="Enterprise Dashboard Generator powered by Gemini 3 Pro" />
-    <title>InfoGenius Enterprise - Dashboard Generator</title>
+    <meta name="description" content="INTake to Insight - Enterprise Dashboard Generator powered by Gemini 3 Pro" />
+    <title>INTake to Insight - Dashboard Generator</title>
     <link rel="manifest" href="/manifest.json" />
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
       tailwind.config = {
         darkMode: 'class',
+        theme: {
+          extend: {
+            colors: {
+              brand: {
+                blue: '#1e3a8a',
+                orange: '#e65c00',
+                'blue-dark': '#152865',
+                'orange-dark': '#c44e00'
+              }
+            }
+          }
+        }
       }
     </script>
     <script>
