@@ -196,6 +196,11 @@ const BrandKitEditor: React.FC<BrandKitEditorProps> = ({ onClose, onUpdate, init
 
           {/* Typography */}
           <div className="space-y-6">
+              {/* Note: The brand kit settings configured here (colors, typography, logo) 
+                  are saved to IndexedDB. When a user generates a visual in the Editor, 
+                  this BrandKit object is retrieved and passed to the Gemini API via 
+                  the `getBrandInstruction` helper in `lib/gemini.ts`. This ensures the 
+                  AI incorporates these exact hex codes and font names into the generated SVG/UI. */}
               <div>
                   <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
                       <Type className="w-4 h-4" /> Typography

@@ -5,6 +5,21 @@
  * 
  * lib/db.ts
  * Implements a "Local-First" database layer using IndexedDB.
+ * 
+ * Schema Design:
+ * - STORE_PROJECTS: Stores dashboard projects (id, title, prompt, history of generated images).
+ * - STORE_SOURCES: Stores data source configurations (API endpoints, uploaded CSVs).
+ * - STORE_CONFIG: Stores global settings like BrandKit, Workspace details, and Current User.
+ * - STORE_TEAM: Stores team member profiles.
+ * - STORE_AUDIT: Stores action logs for compliance.
+ * 
+ * Sync Considerations:
+ * - This implementation is currently local-only.
+ * - To implement cloud sync:
+ *   1. Track a `lastSyncedAt` timestamp on each record.
+ *   2. Use a Service Worker to detect when the connection is restored (`navigator.onLine`).
+ *   3. Push local changes (where `updatedAt > lastSyncedAt`) to the remote server.
+ *   4. Resolve conflicts using a Last-Write-Wins strategy or CRDTs.
  */
 
 import { Project, DataSource, BrandKit, TeamMember, AuditEntry, Workspace, User } from '../types';

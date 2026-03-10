@@ -41,12 +41,12 @@ const Dashboard: React.FC<DashboardProps> = ({ onCreateNew, onOpenProject }) => 
     }
   };
 
-  const handleGenerateVisuals = async (topic: string, summary: string) => {
+  const handleGenerateVisuals = async (topic: string, summary: string, style: any, colorPalette: string, aspectRatio: string) => {
     const newProjectId = Date.now().toString();
     const researchDataSource: DataSource = {
       id: Date.now().toString(),
       name: `Research: ${topic}`,
-      type: 'API',
+      type: 'API_REST',
       status: 'CONNECTED',
       sampleData: summary
     };
@@ -58,7 +58,9 @@ const Dashboard: React.FC<DashboardProps> = ({ onCreateNew, onOpenProject }) => 
       updatedAt: Date.now(),
       prompt: `Create a dashboard visualizing the key insights from this research: ${topic}`,
       level: 'Executive Summary',
-      style: 'Modern SaaS',
+      style: style,
+      colorPalette: colorPalette,
+      aspectRatio: aspectRatio,
       dataSources: [researchDataSource],
       canvasState: { annotations: [], comments: [] },
       history: []

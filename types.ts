@@ -49,6 +49,8 @@ export interface GeneratedImage {
   timestamp: number;
   level: ComplexityLevel;
   style: VisualStyle;
+  aspectRatio?: string;
+  colorPalette?: string;
 }
 
 export interface BrandKit {
@@ -73,6 +75,8 @@ export interface Project {
   prompt: string;
   level: ComplexityLevel;
   style: VisualStyle;
+  aspectRatio?: string;
+  colorPalette?: string;
   
   // Canvas Data
   canvasState: {

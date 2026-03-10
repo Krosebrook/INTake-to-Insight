@@ -10,7 +10,7 @@ import DashboardCanvas from './DashboardCanvas';
 import DataConnectors from './DataConnectors';
 import BrandKitEditor from './BrandKitEditor';
 import Loading from './Loading';
-import { AlertCircle, ArrowLeft, Database, FileSpreadsheet, CheckCircle2, Save, Plus, Settings, Layers, X, Play, Palette } from 'lucide-react';
+import { AlertCircle, ArrowLeft, Database, FileSpreadsheet, CheckCircle2, Save, Plus, Settings, Layers, X, Play, Palette, Undo2, Redo2 } from 'lucide-react';
 
 interface EditorProps {
   projectId: string | null;
@@ -24,6 +24,8 @@ const Editor: React.FC<EditorProps> = ({ projectId, onBack }) => {
   const [objective, setObjective] = useState('');
   const [level, setLevel] = useState<ComplexityLevel>('Operational');
   const [style, setStyle] = useState<VisualStyle>('Modern SaaS');
+  const [aspectRatio, setAspectRatio] = useState('16:9');
+  const [colorPalette, setColorPalette] = useState('Brand Default');
   const [brandKit, setBrandKit] = useState<BrandKit | undefined>();
   
   // Canvas State (Lifted Up)
@@ -48,6 +50,24 @@ const Editor: React.FC<EditorProps> = ({ projectId, onBack }) => {
   const [lastSaved, setLastSaved] = useState<number | null>(null);
 
   // --- Initialization ---
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
+        e.preventDefault();
+        if (e.shiftKey) {
+          handleRedo();
+        } else {
+          handleUndo();
+        }
+      } else if ((e.ctrlKey || e.metaKey) && e.key === 'y') {
+        e.preventDefault();
+        handleRedo();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [history.length, currentIndex]);
+
   useEffect(() => {
     loadBrandKit();
     if (projectId) {
@@ -75,6 +95,8 @@ const Editor: React.FC<EditorProps> = ({ projectId, onBack }) => {
         setObjective(p.prompt);
         setLevel(p.level);
         setStyle(p.style);
+        setAspectRatio(p.aspectRatio || '16:9');
+        setColorPalette(p.colorPalette || 'Brand Default');
         setDataSources(p.dataSources || []);
         
         // Restore Canvas State
@@ -94,7 +116,9 @@ const Editor: React.FC<EditorProps> = ({ projectId, onBack }) => {
                  prompt: p.prompt,
                  timestamp: p.updatedAt,
                  level: p.level,
-                 style: p.style
+                 style: p.style,
+                 aspectRatio: p.aspectRatio,
+                 colorPalette: p.colorPalette
              };
              setHistory([img]);
         }
@@ -122,6 +146,8 @@ const Editor: React.FC<EditorProps> = ({ projectId, onBack }) => {
           prompt: objective,
           level,
           style,
+          aspectRatio,
+          colorPalette,
           canvasState: { annotations, comments },
           thumbnail: currentImg,
           history: history // Persist entire history stack
@@ -184,7 +210,7 @@ const Editor: React.FC<EditorProps> = ({ projectId, onBack }) => {
             REAL DATA TO VISUALIZE:
             ${dataContext}
         `;
-        const base64 = await generateDashboardImage(promptContext, style, brandKit);
+        const base64 = await generateDashboardImage(promptContext, style, brandKit, aspectRatio, colorPalette);
 
         setLoadingStep(4);
         setLoadingMessage("Finalizing UI...");
@@ -195,7 +221,9 @@ const Editor: React.FC<EditorProps> = ({ projectId, onBack }) => {
             prompt: objective,
             timestamp: Date.now(),
             level,
-            style
+            style,
+            aspectRatio,
+            colorPalette
         };
         
         // Push new image to history stack
@@ -257,6 +285,14 @@ const Editor: React.FC<EditorProps> = ({ projectId, onBack }) => {
       }
   };
 
+  const handleUndo = () => {
+      setCurrentIndex(prev => Math.min(prev + 1, history.length - 1));
+  };
+
+  const handleRedo = () => {
+      setCurrentIndex(prev => Math.max(prev - 1, 0));
+  };
+
   const handleDeleteSource = (id: string) => {
       setDataSources(dataSources.filter(ds => ds.id !== id));
       saveProjectState();
@@ -280,6 +316,24 @@ const Editor: React.FC<EditorProps> = ({ projectId, onBack }) => {
          </div>
          
          <div className="flex items-center gap-4">
+             <div className="flex items-center gap-1 mr-2 border-r border-slate-200 dark:border-slate-800 pr-4">
+                 <button 
+                    onClick={handleUndo}
+                    disabled={currentIndex >= history.length - 1}
+                    className="p-2 rounded-lg text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 transition-colors"
+                    title="Undo (Ctrl+Z)"
+                 >
+                    <Undo2 className="w-4 h-4" />
+                 </button>
+                 <button 
+                    onClick={handleRedo}
+                    disabled={currentIndex <= 0}
+                    className="p-2 rounded-lg text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 transition-colors"
+                    title="Redo (Ctrl+Y)"
+                 >
+                    <Redo2 className="w-4 h-4" />
+                 </button>
+             </div>
              <button 
                 onClick={() => setShowBrandModal(true)}
                 className={`p-2 rounded-lg transition-all ${brandKit ? 'text-blue-600 bg-blue-50 dark:bg-blue-900/20' : 'text-slate-400 hover:bg-slate-100'}`}
@@ -405,6 +459,35 @@ const Editor: React.FC<EditorProps> = ({ projectId, onBack }) => {
                                   {style === 'Glassmorphism' && "Frosted glass panels, vivid blurred backgrounds."}
                                   {style === 'Corporate Clean' && "Structured, dense, professional blue/grey."}
                               </p>
+                          </div>
+
+                          <div>
+                              <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1.5">Color Palette</label>
+                              <select 
+                                  value={colorPalette} 
+                                  onChange={(e) => setColorPalette(e.target.value)}
+                                  className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg p-2 text-xs font-bold text-slate-800 dark:text-slate-200 focus:ring-2 focus:ring-blue-900 outline-none"
+                              >
+                                  <option value="Brand Default">Brand Default</option>
+                                  <option value="Monochrome">Monochrome</option>
+                                  <option value="High Contrast">High Contrast</option>
+                                  <option value="Pastel">Pastel</option>
+                                  <option value="Vibrant">Vibrant</option>
+                              </select>
+                          </div>
+
+                          <div>
+                              <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1.5">Aspect Ratio</label>
+                              <select 
+                                  value={aspectRatio} 
+                                  onChange={(e) => setAspectRatio(e.target.value)}
+                                  className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg p-2 text-xs font-bold text-slate-800 dark:text-slate-200 focus:ring-2 focus:ring-blue-900 outline-none"
+                              >
+                                  <option value="16:9">16:9 (Widescreen)</option>
+                                  <option value="4:3">4:3 (Standard)</option>
+                                  <option value="1:1">1:1 (Square)</option>
+                                  <option value="9:16">9:16 (Vertical)</option>
+                              </select>
                           </div>
                       </div>
                   </div>

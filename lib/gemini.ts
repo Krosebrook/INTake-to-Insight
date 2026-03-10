@@ -21,6 +21,25 @@ const decodeBase64 = (str: string): string => {
   return decodeURIComponent(escape(atob(str)));
 };
 
+// --- Utility: Retry Logic with Exponential Backoff ---
+async function withRetry<T>(operation: () => Promise<T>, maxRetries = 3, baseDelay = 1000): Promise<T> {
+  let attempt = 0;
+  while (attempt < maxRetries) {
+    try {
+      return await operation();
+    } catch (error: any) {
+      attempt++;
+      console.warn(`API call failed (attempt ${attempt}/${maxRetries}):`, error);
+      if (attempt >= maxRetries) {
+        throw error;
+      }
+      const delay = baseDelay * Math.pow(2, attempt - 1);
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+  }
+  throw new Error("Max retries reached");
+}
+
 const getLevelInstruction = (level: ComplexityLevel): string => {
   switch (level) {
     case 'Executive Summary':
@@ -86,7 +105,7 @@ export async function analyzeDashboardRequirements(
   const brandInstr = getBrandInstruction(brand);
 
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-  const response = await ai.models.generateContent({
+  const response = await withRetry(() => ai.models.generateContent({
     model: TEXT_MODEL,
     contents: `User Objective: "${objective}"\nData Context: ${dataContext}`,
     config: {
@@ -113,7 +132,7 @@ export async function analyzeDashboardRequirements(
         required: ["dashboardStrategy", "kpis", "suggestedCharts"]
       }
     }
-  });
+  }));
 
   const text = response.text;
   if (!text) throw new Error("Failed to analyze requirements");
@@ -124,9 +143,10 @@ export async function analyzeDashboardRequirements(
  * Generates an SVG dashboard mockup using the Text Model for vector precision.
  * Falls back to Raster Image model if SVG generation fails.
  */
-export async function generateDashboardImage(prompt: string, style: VisualStyle, brand?: BrandKit): Promise<string> {
+export async function generateDashboardImage(prompt: string, style: VisualStyle, brand?: BrandKit, aspectRatio: string = "16:9", colorPalette: string = "Brand Default"): Promise<string> {
   const aesthetic = getStyleInstruction(style);
   const brandInstr = getBrandInstruction(brand);
+  const paletteInstr = colorPalette !== "Brand Default" ? `\nCOLOR PALETTE: Use a ${colorPalette} color palette.` : "";
   
   // 1. Attempt to generate SVG Code
   // Enhanced prompt for interactivity and grounding
@@ -137,6 +157,7 @@ export async function generateDashboardImage(prompt: string, style: VisualStyle,
     Context:
     ${aesthetic}
     ${brandInstr}
+    ${paletteInstr}
     Content Requirements: ${prompt}
     
     CRITICAL TECHNICAL CONSTRAINTS:
@@ -155,10 +176,10 @@ export async function generateDashboardImage(prompt: string, style: VisualStyle,
 
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   try {
-    const response = await ai.models.generateContent({
+    const response = await withRetry(() => ai.models.generateContent({
         model: TEXT_MODEL,
         contents: svgPrompt,
-    });
+    }));
 
     const text = response.text;
     if (text) {
@@ -175,26 +196,27 @@ export async function generateDashboardImage(prompt: string, style: VisualStyle,
   }
 
   // 2. Fallback to Raster Image Generation
-  return generateRasterDashboard(prompt, style, brand);
+  return generateRasterDashboard(prompt, style, brand, aspectRatio, colorPalette);
 }
 
 // Fallback function for Raster generation
-async function generateRasterDashboard(prompt: string, style: VisualStyle, brand?: BrandKit): Promise<string> {
+async function generateRasterDashboard(prompt: string, style: VisualStyle, brand?: BrandKit, aspectRatio: string = "16:9", colorPalette: string = "Brand Default"): Promise<string> {
     const aesthetic = getStyleInstruction(style);
     const brandInstr = getBrandInstruction(brand);
-    const fullPrompt = `Generate a high-fidelity UI mockup of a business dashboard. ${aesthetic} ${brandInstr} Content requirements: ${prompt} Ensure all text is legible (pseudo-text is okay for body). Show a sidebar navigation and a top header with user profile. Make it look like a real React/Web application.`;
+    const paletteInstr = colorPalette !== "Brand Default" ? ` Use a ${colorPalette} color palette.` : "";
+    const fullPrompt = `Generate a high-fidelity UI mockup of a business dashboard. ${aesthetic} ${brandInstr}${paletteInstr} Content requirements: ${prompt} Ensure all text is legible (pseudo-text is okay for body). Show a sidebar navigation and a top header with user profile. Make it look like a real React/Web application.`;
 
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-    const response = await ai.models.generateContent({
+    const response = await withRetry(() => ai.models.generateContent({
         model: IMAGE_MODEL,
         contents: fullPrompt,
         config: { 
             imageConfig: {
-                aspectRatio: "16:9",
+                aspectRatio: aspectRatio as any,
                 imageSize: "1K"
             }
         }
-    });
+    }));
 
     if (response.candidates?.[0]?.content?.parts) {
         for (const part of response.candidates[0].content.parts) {
@@ -231,10 +253,10 @@ export async function editDashboardImage(imageBase64: string, instruction: strin
             ${svgCode}
           `;
 
-          const response = await ai.models.generateContent({
+          const response = await withRetry(() => ai.models.generateContent({
               model: TEXT_MODEL,
               contents: fullPrompt,
-          });
+          }));
 
           const text = response.text;
           if (text) {
@@ -255,7 +277,7 @@ export async function editDashboardImage(imageBase64: string, instruction: strin
   const cleanBase64 = imageBase64.replace(/^data:image\/(png|jpeg|jpg);base64,/, '');
   const brandInstr = getBrandInstruction(brand);
   
-  const response = await ai.models.generateContent({
+  const response = await withRetry(() => ai.models.generateContent({
     model: IMAGE_MODEL,
     contents: {
       parts: [
@@ -269,7 +291,7 @@ export async function editDashboardImage(imageBase64: string, instruction: strin
             imageSize: "1K"
         }
     }
-  });
+  }));
   
   if (response.candidates?.[0]?.content?.parts) {
       for (const part of response.candidates[0].content.parts) {
@@ -283,13 +305,13 @@ export async function editDashboardImage(imageBase64: string, instruction: strin
 
 export async function researchTopic(topic: string, audience: string): Promise<{ summary: string, sources: any[] }> {
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-  const response = await ai.models.generateContent({
+  const response = await withRetry(() => ai.models.generateContent({
     model: "gemini-3-pro-preview",
     contents: `Research the following topic: "${topic}". Provide a comprehensive summary tailored for this audience: "${audience}". Include key statistics, trends, and actionable insights.`,
     config: {
       tools: [{ googleSearch: {} }],
     },
-  });
+  }));
 
   const text = response.text || "No summary available.";
   const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
