@@ -9,8 +9,15 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { ComplexityLevel, VisualStyle, AnalysisResult, BrandKit } from "../types";
 
-const TEXT_MODEL = 'gemini-3-pro-preview';
-const IMAGE_MODEL = 'gemini-3-pro-image-preview';
+export class AIError extends Error {
+  constructor(public type: 'RATE_LIMIT' | 'API_ERROR' | 'INVALID_PROMPT' | 'TIMEOUT' | 'UNKNOWN', message: string, public originalError?: any) {
+    super(message);
+    this.name = 'AIError';
+  }
+}
+
+const TEXT_MODEL = 'gemini-3.1-pro-preview';
+const IMAGE_MODEL = 'gemini-3.1-flash-image-preview';
 
 // --- Utility: Base64 Handling for Browser ---
 const encodeBase64 = (str: string): string => {
@@ -26,18 +33,41 @@ async function withRetry<T>(operation: () => Promise<T>, maxRetries = 3, baseDel
   let attempt = 0;
   while (attempt < maxRetries) {
     try {
-      return await operation();
+      return await Promise.race([
+        operation(),
+        new Promise<T>((_, reject) => setTimeout(() => reject(new Error('TIMEOUT')), 60000)) // 60s timeout
+      ]);
     } catch (error: any) {
       attempt++;
       console.warn(`API call failed (attempt ${attempt}/${maxRetries}):`, error);
+      
+      let errorType: 'RATE_LIMIT' | 'API_ERROR' | 'INVALID_PROMPT' | 'TIMEOUT' | 'UNKNOWN' = 'UNKNOWN';
+      let errorMessage = error.message || "An unknown error occurred.";
+
+      if (error.message === 'TIMEOUT') {
+          errorType = 'TIMEOUT';
+          errorMessage = "The request took too long to complete.";
+      } else if (error.status === 429 || error.message?.includes('429') || error.message?.includes('quota')) {
+          errorType = 'RATE_LIMIT';
+          errorMessage = "Rate limit exceeded. Please try again in a moment.";
+      } else if (error.status >= 400 && error.status < 500) {
+          errorType = 'INVALID_PROMPT';
+          errorMessage = "The request was invalid. Please check your prompt and try again.";
+          // Don't retry client errors (except 429)
+          throw new AIError(errorType, errorMessage, error);
+      } else if (error.status >= 500) {
+          errorType = 'API_ERROR';
+          errorMessage = "The AI service is currently experiencing issues.";
+      }
+
       if (attempt >= maxRetries) {
-        throw error;
+        throw new AIError(errorType, errorMessage, error);
       }
       const delay = baseDelay * Math.pow(2, attempt - 1);
       await new Promise(resolve => setTimeout(resolve, delay));
     }
   }
-  throw new Error("Max retries reached");
+  throw new AIError('UNKNOWN', "Max retries reached");
 }
 
 const getLevelInstruction = (level: ComplexityLevel): string => {
@@ -97,19 +127,21 @@ export async function analyzeDashboardRequirements(
   dataContext: string,
   level: ComplexityLevel, 
   style: VisualStyle,
-  brand?: BrandKit
+  brand?: BrandKit,
+  targetAudience?: string
 ): Promise<AnalysisResult> {
   
   const levelInstr = getLevelInstruction(level);
   const styleInstr = getStyleInstruction(style);
   const brandInstr = getBrandInstruction(brand);
+  const audienceInstr = targetAudience ? `Target Audience: ${targetAudience}.` : "";
 
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   const response = await withRetry(() => ai.models.generateContent({
     model: TEXT_MODEL,
     contents: `User Objective: "${objective}"\nData Context: ${dataContext}`,
     config: {
-      systemInstruction: `You are a Senior Product Designer and Data Scientist. Your goal is to design a Dashboard UI based on the user's data sources and objective. Design constraints: ${levelInstr} ${styleInstr} ${brandInstr}`,
+      systemInstruction: `You are a Senior Product Designer and Data Scientist. Your goal is to design a Dashboard UI based on the user's data sources and objective. Design constraints: ${levelInstr} ${styleInstr} ${brandInstr} ${audienceInstr}`,
       responseMimeType: "application/json",
       responseSchema: {
         type: Type.OBJECT,
@@ -135,18 +167,23 @@ export async function analyzeDashboardRequirements(
   }));
 
   const text = response.text;
-  if (!text) throw new Error("Failed to analyze requirements");
-  return JSON.parse(text);
+  if (!text) throw new AIError('API_ERROR', "Failed to analyze requirements: Empty response from model.");
+  try {
+      return JSON.parse(text);
+  } catch (e) {
+      throw new AIError('API_ERROR', "Failed to parse analysis results. The model returned invalid JSON.", e);
+  }
 }
 
 /**
  * Generates an SVG dashboard mockup using the Text Model for vector precision.
  * Falls back to Raster Image model if SVG generation fails.
  */
-export async function generateDashboardImage(prompt: string, style: VisualStyle, brand?: BrandKit, aspectRatio: string = "16:9", colorPalette: string = "Brand Default"): Promise<string> {
+export async function generateDashboardImage(prompt: string, style: VisualStyle, brand?: BrandKit, aspectRatio: string = "16:9", colorPalette: string = "Brand Default", targetAudience?: string): Promise<string> {
   const aesthetic = getStyleInstruction(style);
   const brandInstr = getBrandInstruction(brand);
   const paletteInstr = colorPalette !== "Brand Default" ? `\nCOLOR PALETTE: Use a ${colorPalette} color palette.` : "";
+  const audienceInstr = targetAudience ? `\nTARGET AUDIENCE: Tailor all visuals, terminology, and complexity for ${targetAudience}.` : "";
   
   // 1. Attempt to generate SVG Code
   // Enhanced prompt for interactivity and grounding
@@ -158,6 +195,7 @@ export async function generateDashboardImage(prompt: string, style: VisualStyle,
     ${aesthetic}
     ${brandInstr}
     ${paletteInstr}
+    ${audienceInstr}
     Content Requirements: ${prompt}
     
     CRITICAL TECHNICAL CONSTRAINTS:
@@ -191,20 +229,24 @@ export async function generateDashboardImage(prompt: string, style: VisualStyle,
             return `data:image/svg+xml;base64,${base64Svg}`;
         }
     }
-  } catch (e) {
+  } catch (e: any) {
     console.warn("SVG Generation failed, falling back to raster.", e);
+    if (e instanceof AIError && e.type === 'RATE_LIMIT') {
+        throw e; // Don't fallback on rate limit, bubble it up
+    }
   }
 
   // 2. Fallback to Raster Image Generation
-  return generateRasterDashboard(prompt, style, brand, aspectRatio, colorPalette);
+  return generateRasterDashboard(prompt, style, brand, aspectRatio, colorPalette, targetAudience);
 }
 
 // Fallback function for Raster generation
-async function generateRasterDashboard(prompt: string, style: VisualStyle, brand?: BrandKit, aspectRatio: string = "16:9", colorPalette: string = "Brand Default"): Promise<string> {
+async function generateRasterDashboard(prompt: string, style: VisualStyle, brand?: BrandKit, aspectRatio: string = "16:9", colorPalette: string = "Brand Default", targetAudience?: string): Promise<string> {
     const aesthetic = getStyleInstruction(style);
     const brandInstr = getBrandInstruction(brand);
     const paletteInstr = colorPalette !== "Brand Default" ? ` Use a ${colorPalette} color palette.` : "";
-    const fullPrompt = `Generate a high-fidelity UI mockup of a business dashboard. ${aesthetic} ${brandInstr}${paletteInstr} Content requirements: ${prompt} Ensure all text is legible (pseudo-text is okay for body). Show a sidebar navigation and a top header with user profile. Make it look like a real React/Web application.`;
+    const audienceInstr = targetAudience ? ` Tailor for audience: ${targetAudience}.` : "";
+    const fullPrompt = `Generate a high-fidelity UI mockup of a business dashboard. ${aesthetic} ${brandInstr}${paletteInstr}${audienceInstr} Content requirements: ${prompt} Ensure all text is legible (pseudo-text is okay for body). Show a sidebar navigation and a top header with user profile. Make it look like a real React/Web application.`;
 
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const response = await withRetry(() => ai.models.generateContent({
@@ -225,7 +267,7 @@ async function generateRasterDashboard(prompt: string, style: VisualStyle, brand
             }
         }
     }
-    throw new Error("Dashboard generation failed");
+    throw new AIError('API_ERROR', "Dashboard generation failed: No image data returned.");
 }
 
 export async function editDashboardImage(imageBase64: string, instruction: string, brand?: BrandKit): Promise<string> {
@@ -267,9 +309,12 @@ export async function editDashboardImage(imageBase64: string, instruction: strin
                   return `data:image/svg+xml;base64,${newBase64}`;
               }
           }
-      } catch (e) {
+      } catch (e: any) {
           console.warn("SVG Edit failed", e);
-          throw new Error("Failed to edit SVG dashboard.");
+          if (e instanceof AIError && e.type === 'RATE_LIMIT') {
+              throw e;
+          }
+          throw new AIError('API_ERROR', "Failed to edit SVG dashboard.", e);
       }
   }
 
@@ -300,7 +345,7 @@ export async function editDashboardImage(imageBase64: string, instruction: strin
           }
       }
   }
-  throw new Error("Edit failed");
+  throw new AIError('API_ERROR', "Edit failed: No image data returned.");
 }
 
 export async function researchTopic(topic: string, audience: string): Promise<{ summary: string, sources: any[] }> {

@@ -15,16 +15,17 @@ This application is designed as a **Local-First** Single Page Application (SPA),
 
 ### 🧠 Generative Intelligence
 - **Prompt-to-Dashboard:** Instantly generate professional UI mockups based on high-level descriptions (e.g., "Q3 Financial Overview for Stakeholders").
+- **Audience-Tailored Output:** Specify a target audience (e.g., "Executives", "Data Scientists") to automatically adjust the visual complexity, terminology, and KPI selection of the generated dashboard.
 - **Visual Refinement:** iteratively edit visuals using natural language (e.g., "Change the charts to be dark mode," "Add a user growth metric").
 - **Search Grounding:** (Beta) Synthesizes real-world data to inform visual content.
 
 ### 🎨 Creative Control
 - **Brand Kit System:** Enforce corporate identity with global settings for logos, color palettes, and typography.
-- **Canvas Editor:** Drag-and-drop annotation system, layer management (z-index), and precise grid snapping.
+- **Interactive Canvas Editor:** Add text annotations, pin comments, manage layers (z-index), and use precise grid snapping directly on the generated dashboards.
 - **Multi-Modal Export:** Export designs as high-res PNG, JPG, or PDF for presentations.
 
 ### 🛡️ Enterprise Ready
-- **Local Persistence:** Auto-saves work to IndexedDB; no data loss on refresh.
+- **Robust Local Persistence:** Auto-saves projects, generated history, and all canvas annotations/comments to IndexedDB with debouncing to prevent data loss.
 - **Audit Logging:** Tracks all generation, edit, and export events for compliance.
 - **Security:** Role-Based Access Control (RBAC) simulation and audit trails.
 

@@ -23,6 +23,14 @@ const DEFAULT_KIT: BrandKit = {
   headingFont: 'Space Grotesk'
 };
 
+const PREDEFINED_PALETTES = [
+  { name: 'Corporate Blue', primaryColor: '#1e3a8a', secondaryColor: '#334155', accentColor: '#e65c00', backgroundColor: '#f8fafc' },
+  { name: 'Forest Green', primaryColor: '#166534', secondaryColor: '#1f2937', accentColor: '#4ade80', backgroundColor: '#f0fdf4' },
+  { name: 'Midnight Purple', primaryColor: '#6b21a8', secondaryColor: '#1e1b4b', accentColor: '#c084fc', backgroundColor: '#faf5ff' },
+  { name: 'Sunset Orange', primaryColor: '#c2410c', secondaryColor: '#431407', accentColor: '#fb923c', backgroundColor: '#fff7ed' },
+  { name: 'Monochrome Dark', primaryColor: '#ffffff', secondaryColor: '#94a3b8', accentColor: '#38bdf8', backgroundColor: '#0f172a' },
+];
+
 const BrandKitEditor: React.FC<BrandKitEditorProps> = ({ onClose, onUpdate, initialKit }) => {
   const [kit, setKit] = useState<BrandKit>(initialKit || DEFAULT_KIT);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
@@ -95,6 +103,16 @@ const BrandKitEditor: React.FC<BrandKitEditorProps> = ({ onClose, onUpdate, init
       }
   };
 
+  const applyPalette = (palette: typeof PREDEFINED_PALETTES[0]) => {
+      setKit(prev => ({
+          ...prev,
+          primaryColor: palette.primaryColor,
+          secondaryColor: palette.secondaryColor,
+          accentColor: palette.accentColor,
+          backgroundColor: palette.backgroundColor
+      }));
+  };
+
   return (
     <div className="space-y-8 animate-in fade-in duration-300">
       <div className="flex items-center justify-between">
@@ -165,6 +183,28 @@ const BrandKitEditor: React.FC<BrandKitEditorProps> = ({ onClose, onUpdate, init
                   <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
                       <Palette className="w-4 h-4" /> Color Palette
                   </h3>
+                  
+                  <div className="mb-4">
+                      <label className="text-[10px] font-bold text-slate-500 uppercase mb-2 block">Predefined Palettes</label>
+                      <div className="flex flex-wrap gap-2">
+                          {PREDEFINED_PALETTES.map(p => (
+                              <button
+                                  key={p.name}
+                                  onClick={() => applyPalette(p)}
+                                  className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+                                  title={p.name}
+                              >
+                                  <div className="flex -space-x-1">
+                                      <div className="w-3 h-3 rounded-full border border-white dark:border-slate-900" style={{ background: p.primaryColor }} />
+                                      <div className="w-3 h-3 rounded-full border border-white dark:border-slate-900" style={{ background: p.secondaryColor }} />
+                                      <div className="w-3 h-3 rounded-full border border-white dark:border-slate-900" style={{ background: p.accentColor }} />
+                                  </div>
+                                  <span className="text-[10px] font-medium text-slate-600 dark:text-slate-300">{p.name}</span>
+                              </button>
+                          ))}
+                      </div>
+                  </div>
+
                   <div className="grid grid-cols-2 gap-4">
                       {[
                           { key: 'primaryColor', label: 'Primary' },

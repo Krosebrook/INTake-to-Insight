@@ -4,7 +4,7 @@
 */
 import React, { useState, useEffect } from 'react';
 import { Project, ComplexityLevel, VisualStyle, DataSource, GeneratedImage, Annotation, Comment, BrandKit } from '../types';
-import { analyzeDashboardRequirements, generateDashboardImage, editDashboardImage } from '../lib/gemini';
+import { analyzeDashboardRequirements, generateDashboardImage, editDashboardImage, AIError } from '../lib/gemini';
 import { db } from '../lib/db';
 import DashboardCanvas from './DashboardCanvas'; 
 import DataConnectors from './DataConnectors';
@@ -19,9 +19,11 @@ interface EditorProps {
 
 const Editor: React.FC<EditorProps> = ({ projectId, onBack }) => {
   // --- State ---
+  const [internalProjectId] = useState<string>(projectId || Date.now().toString());
   const [project, setProject] = useState<Project | null>(null);
   const [dataSources, setDataSources] = useState<DataSource[]>([]);
   const [objective, setObjective] = useState('');
+  const [targetAudience, setTargetAudience] = useState('');
   const [level, setLevel] = useState<ComplexityLevel>('Operational');
   const [style, setStyle] = useState<VisualStyle>('Modern SaaS');
   const [aspectRatio, setAspectRatio] = useState('16:9');
@@ -37,7 +39,7 @@ const Editor: React.FC<EditorProps> = ({ projectId, onBack }) => {
   const [loadingMessage, setLoadingMessage] = useState('');
   const [loadingStep, setLoadingStep] = useState(0);
   const [analysisFacts, setAnalysisFacts] = useState<string[]>([]);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<{ message: string; type?: string; action?: string } | null>(null);
   
   // History
   const [history, setHistory] = useState<GeneratedImage[]>([]);
@@ -48,6 +50,8 @@ const Editor: React.FC<EditorProps> = ({ projectId, onBack }) => {
   const [showBrandModal, setShowBrandModal] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [lastSaved, setLastSaved] = useState<number | null>(null);
+  const [isLoaded, setIsLoaded] = useState(false);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
   // --- Initialization ---
   useEffect(() => {
@@ -75,6 +79,7 @@ const Editor: React.FC<EditorProps> = ({ projectId, onBack }) => {
     } else {
         // New Project Defaults
         setShowDataModal(true);
+        setIsLoaded(true);
     }
   }, [projectId]);
 
@@ -93,6 +98,7 @@ const Editor: React.FC<EditorProps> = ({ projectId, onBack }) => {
       if (p) {
         setProject(p);
         setObjective(p.prompt);
+        setTargetAudience(p.targetAudience || '');
         setLevel(p.level);
         setStyle(p.style);
         setAspectRatio(p.aspectRatio || '16:9');
@@ -122,6 +128,7 @@ const Editor: React.FC<EditorProps> = ({ projectId, onBack }) => {
              };
              setHistory([img]);
         }
+        setIsLoaded(true);
       }
     } catch (e) {
       console.error("Failed to load project", e);
@@ -138,12 +145,13 @@ const Editor: React.FC<EditorProps> = ({ projectId, onBack }) => {
       const currentImg = newImage || (history[currentIndex]?.data);
       
       const p: Project = {
-          id: project?.id || projectId || Date.now().toString(),
+          id: project?.id || internalProjectId,
           title: objective || "Untitled Dashboard",
           createdAt: project?.createdAt || Date.now(),
           updatedAt: Date.now(),
           dataSources,
           prompt: objective,
+          targetAudience,
           level,
           style,
           aspectRatio,
@@ -158,6 +166,7 @@ const Editor: React.FC<EditorProps> = ({ projectId, onBack }) => {
       
       setProject(p);
       setLastSaved(Date.now());
+      setHasUnsavedChanges(false);
   };
 
   // --- Handlers ---
@@ -187,7 +196,7 @@ const Editor: React.FC<EditorProps> = ({ projectId, onBack }) => {
         ${d.sampleData || 'No specific rows, use mock data.'}
         `).join('\n---\n');
         
-        const analysis = await analyzeDashboardRequirements(objective, dataContext, level, style, brandKit);
+        const analysis = await analyzeDashboardRequirements(objective, dataContext, level, style, brandKit, targetAudience);
         setAnalysisFacts([
             `Strategy: ${analysis.dashboardStrategy}`,
             `KPIs: ${analysis.kpis.join(', ')}`,
@@ -210,7 +219,7 @@ const Editor: React.FC<EditorProps> = ({ projectId, onBack }) => {
             REAL DATA TO VISUALIZE:
             ${dataContext}
         `;
-        const base64 = await generateDashboardImage(promptContext, style, brandKit, aspectRatio, colorPalette);
+        const base64 = await generateDashboardImage(promptContext, style, brandKit, aspectRatio, colorPalette, targetAudience);
 
         setLoadingStep(4);
         setLoadingMessage("Finalizing UI...");
@@ -219,6 +228,7 @@ const Editor: React.FC<EditorProps> = ({ projectId, onBack }) => {
             id: Date.now().toString(),
             data: base64,
             prompt: objective,
+            targetAudience,
             timestamp: Date.now(),
             level,
             style,
@@ -236,7 +246,14 @@ const Editor: React.FC<EditorProps> = ({ projectId, onBack }) => {
 
     } catch (err: any) {
         console.error(err);
-        setError(err.message || "Generation failed");
+        if (err instanceof AIError) {
+            let action = "Please try again.";
+            if (err.type === 'RATE_LIMIT') action = "Wait a moment before trying again.";
+            if (err.type === 'INVALID_PROMPT') action = "Try simplifying your prompt or data.";
+            setError({ message: err.message, type: err.type, action });
+        } else {
+            setError({ message: err.message || "An unexpected error occurred during generation." });
+        }
     } finally {
         setIsLoading(false);
         setLoadingStep(0);
@@ -268,7 +285,15 @@ const Editor: React.FC<EditorProps> = ({ projectId, onBack }) => {
           await saveProjectState(base64);
 
       } catch (err: any) {
-          setError(err.message || "Edit failed");
+          console.error(err);
+          if (err instanceof AIError) {
+              let action = "Please try again.";
+              if (err.type === 'RATE_LIMIT') action = "Wait a moment before trying again.";
+              if (err.type === 'INVALID_PROMPT') action = "Try a different edit instruction.";
+              setError({ message: err.message, type: err.type, action });
+          } else {
+              setError({ message: err.message || "An unexpected error occurred during editing." });
+          }
       } finally {
           setIsLoading(false);
           setLoadingStep(0);
@@ -298,6 +323,17 @@ const Editor: React.FC<EditorProps> = ({ projectId, onBack }) => {
       saveProjectState();
   };
 
+  // Auto-save project state when settings or canvas change
+  useEffect(() => {
+      if (isLoaded) {
+          setHasUnsavedChanges(true);
+          const timer = setTimeout(() => {
+              saveProjectState();
+          }, 1500); // 1.5s debounce
+          return () => clearTimeout(timer);
+      }
+  }, [annotations, comments, level, style, aspectRatio, colorPalette, targetAudience, objective, isLoaded]);
+
   return (
     <div className="flex flex-col h-full bg-slate-50 dark:bg-slate-950 overflow-hidden">
       
@@ -308,8 +344,9 @@ const Editor: React.FC<EditorProps> = ({ projectId, onBack }) => {
                  <ArrowLeft className="w-5 h-5 text-slate-600 dark:text-slate-400" />
              </button>
              <div className="flex flex-col">
-                 <h2 className="font-bold text-sm md:text-base text-slate-900 dark:text-white truncate max-w-[200px]">
+                 <h2 className="font-bold text-sm md:text-base text-slate-900 dark:text-white truncate max-w-[200px] flex items-center gap-2">
                     {project?.title || 'New Dashboard'}
+                    {hasUnsavedChanges && <span className="w-2 h-2 rounded-full bg-brand-orange animate-pulse" title="Unsaved changes"></span>}
                  </h2>
                  {lastSaved && <span className="text-[10px] text-slate-400">Version Saved {new Date(lastSaved).toLocaleTimeString()}</span>}
              </div>
@@ -399,15 +436,26 @@ const Editor: React.FC<EditorProps> = ({ projectId, onBack }) => {
 
                   <hr className="border-slate-100 dark:border-slate-800" />
 
-                  {/* Configuration Section */}
+          {/* Configuration Section */}
+          <div>
+              <h3 className="text-xs font-bold text-slate-500 uppercase flex items-center gap-2 mb-3">
+                  <Settings className="w-4 h-4" /> Configuration
+              </h3>
+              
+              <div className="space-y-4">
                   <div>
-                      <h3 className="text-xs font-bold text-slate-500 uppercase flex items-center gap-2 mb-3">
-                          <Settings className="w-4 h-4" /> Configuration
-                      </h3>
-                      
-                      <div className="space-y-4">
-                          <div>
-                              <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1.5">Complexity Level</label>
+                      <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1.5">Target Audience</label>
+                      <input 
+                          type="text"
+                          value={targetAudience}
+                          onChange={(e) => setTargetAudience(e.target.value)}
+                          placeholder="e.g. Sales Team, Investors, Ops Managers"
+                          className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg p-2 text-xs font-medium text-slate-800 dark:text-slate-200 focus:ring-2 focus:ring-blue-900 outline-none"
+                      />
+                  </div>
+
+                  <div>
+                      <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1.5">Complexity Level</label>
                               <div className="grid grid-cols-2 gap-2">
                                   {['Executive Summary', 'Operational', 'Analytical', 'Strategic'].map((l) => (
                                       <button 
@@ -527,10 +575,14 @@ const Editor: React.FC<EditorProps> = ({ projectId, onBack }) => {
                )}
 
                {error && !isLoading && (
-                   <div className="absolute top-4 left-4 right-4 z-50 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-500/30 text-red-600 dark:text-red-300 p-4 rounded-xl flex items-center gap-3">
-                       <AlertCircle className="w-5 h-5" />
-                       <p>{error}</p>
-                       <button onClick={() => setError(null)} className="ml-auto"><X className="w-4 h-4" /></button>
+                   <div className="absolute top-4 left-4 right-4 z-50 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-500/30 text-red-600 dark:text-red-300 p-4 rounded-xl flex items-start gap-3 shadow-lg animate-in slide-in-from-top-2">
+                       <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
+                       <div className="flex-1">
+                           <h4 className="font-bold text-sm">{error.type === 'RATE_LIMIT' ? 'Too Many Requests' : error.type === 'TIMEOUT' ? 'Request Timed Out' : 'Generation Error'}</h4>
+                           <p className="text-sm mt-1">{error.message}</p>
+                           {error.action && <p className="text-xs mt-2 font-medium opacity-80">{error.action}</p>}
+                       </div>
+                       <button onClick={() => setError(null)} className="p-1 hover:bg-red-100 dark:hover:bg-red-900/40 rounded-md transition-colors"><X className="w-4 h-4" /></button>
                    </div>
                )}
 

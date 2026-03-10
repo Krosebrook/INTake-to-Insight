@@ -9,6 +9,8 @@ import {
     Download, Bold, Italic, FileImage, FileText, ChevronUp, ChevronDown, 
     Check, Sidebar, Plus, GripVertical, Palette, ChevronsUp, ChevronsDown 
 } from 'lucide-react';
+import { Tooltip } from './Tooltip';
+import { ExportModal, ExportOptions } from './ExportModal';
 
 interface DashboardCanvasProps {
   image: GeneratedImage;
@@ -51,12 +53,16 @@ const DashboardCanvas: React.FC<DashboardCanvasProps> = ({
   const [activeCommentId, setActiveCommentId] = useState<string | null>(null);
   const [showCommentSidebar, setShowCommentSidebar] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [showExportMenu, setShowExportMenu] = useState(false);
+  const [showExportModal, setShowExportModal] = useState(false);
   
   // Dragging State
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const [initialAnnPos, setInitialAnnPos] = useState({ x: 0, y: 0 });
+  
+  // Resizing State
+  const [isResizing, setIsResizing] = useState(false);
+  const [resizeStart, setResizeStart] = useState({ x: 0, y: 0, fontSize: 0 });
   
   // Local state for smooth dragging performance (prevents heavy parent re-renders)
   const [localDragState, setLocalDragState] = useState<{ id: string; x: number; y: number } | null>(null);
@@ -130,7 +136,7 @@ const DashboardCanvas: React.FC<DashboardCanvasProps> = ({
   };
 
   // --- Export Logic ---
-  const generateCanvas = async (fillBackground: boolean = false): Promise<HTMLCanvasElement> => {
+  const generateCanvas = async (options: ExportOptions): Promise<HTMLCanvasElement> => {
       const canvas = document.createElement('canvas');
       const ctx = canvas.getContext('2d');
       if (!ctx) throw new Error("Could not get canvas context");
@@ -140,8 +146,11 @@ const DashboardCanvas: React.FC<DashboardCanvasProps> = ({
       img.src = image.data;
       await new Promise(resolve => img.onload = resolve);
 
-      canvas.width = img.naturalWidth;
-      canvas.height = img.naturalHeight;
+      const scale = options.scale || 1;
+      canvas.width = img.naturalWidth * scale;
+      canvas.height = img.naturalHeight * scale;
+
+      const fillBackground = options.format === 'jpg' || options.format === 'pdf' || !options.transparentBg;
 
       if (fillBackground) {
           ctx.fillStyle = '#ffffff';
@@ -149,7 +158,7 @@ const DashboardCanvas: React.FC<DashboardCanvasProps> = ({
       }
 
       // Draw Base Image
-      ctx.drawImage(img, 0, 0);
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
       // Draw Annotations
       annotations.forEach(ann => {
@@ -169,15 +178,28 @@ const DashboardCanvas: React.FC<DashboardCanvasProps> = ({
       return canvas;
   };
 
-  const handleExport = async (format: 'png' | 'jpg' | 'pdf') => {
-      setShowExportMenu(false);
+  const handleExport = async (options: ExportOptions) => {
+      setShowExportModal(false);
       try {
-          const withBackground = format === 'jpg' || format === 'pdf';
-          const canvas = await generateCanvas(withBackground);
-          const mimeType = format === 'jpg' ? 'image/jpeg' : 'image/png';
-          const dataUrl = canvas.toDataURL(mimeType, 0.9);
+          if (options.format === 'svg' && isSvg) {
+              // Export raw SVG
+              const blob = new Blob([svgContent], { type: 'image/svg+xml' });
+              const url = URL.createObjectURL(blob);
+              const link = document.createElement('a');
+              link.href = url;
+              link.download = `dashboard_export.svg`;
+              document.body.appendChild(link);
+              link.click();
+              document.body.removeChild(link);
+              URL.revokeObjectURL(url);
+              return;
+          }
 
-          if (format === 'pdf') {
+          const canvas = await generateCanvas(options);
+          const mimeType = options.format === 'jpg' ? 'image/jpeg' : 'image/png';
+          const dataUrl = canvas.toDataURL(mimeType, options.quality);
+
+          if (options.format === 'pdf') {
              const win = window.open('', '_blank');
              if (win) {
                  win.document.write(`
@@ -193,7 +215,7 @@ const DashboardCanvas: React.FC<DashboardCanvasProps> = ({
           } else {
               const link = document.createElement('a');
               link.href = dataUrl;
-              link.download = `dashboard_export.${format}`;
+              link.download = `dashboard_export.${options.format}`;
               document.body.appendChild(link);
               link.click();
               document.body.removeChild(link);
@@ -232,7 +254,7 @@ const DashboardCanvas: React.FC<DashboardCanvasProps> = ({
   // --- Canvas Interaction (Dragging with Pointer Events) ---
 
   const handlePointerDown = (e: React.PointerEvent, id: string) => {
-    if (activeTool !== 'none' || !imageContainerRef.current) return;
+    if (activeTool !== 'none' || !imageContainerRef.current || isResizing) return;
     e.stopPropagation();
     
     const ann = annotations.find(a => a.id === id);
@@ -258,7 +280,7 @@ const DashboardCanvas: React.FC<DashboardCanvasProps> = ({
   };
 
   const handlePointerMove = (e: React.PointerEvent) => {
-    if (!isDragging || !selectedAnnotationId || !dragRectRef.current) return;
+    if (!isDragging || !selectedAnnotationId || !dragRectRef.current || isResizing) return;
     
     const rect = dragRectRef.current;
     
@@ -303,8 +325,41 @@ const DashboardCanvas: React.FC<DashboardCanvasProps> = ({
     dragRectRef.current = null;
   };
 
+  // --- Canvas Interaction (Resizing) ---
+  const handleResizePointerDown = (e: React.PointerEvent, id: string) => {
+    e.stopPropagation();
+    const ann = annotations.find(a => a.id === id);
+    if (!ann) return;
+
+    setIsResizing(true);
+    setSelectedAnnotationId(id);
+    setResizeStart({ x: e.clientX, y: e.clientY, fontSize: ann.fontSize });
+    (e.currentTarget as Element).setPointerCapture(e.pointerId);
+  };
+
+  const handleResizePointerMove = (e: React.PointerEvent) => {
+    if (!isResizing || !selectedAnnotationId) return;
+    e.stopPropagation();
+
+    const deltaY = e.clientY - resizeStart.y;
+    const deltaX = e.clientX - resizeStart.x;
+    const delta = (deltaX + deltaY) / 2;
+    
+    const newFontSize = Math.max(8, Math.min(200, resizeStart.fontSize + delta));
+    updateAnnotation(selectedAnnotationId, { fontSize: Math.round(newFontSize) });
+  };
+
+  const handleResizePointerUp = (e: React.PointerEvent) => {
+    if (isResizing) {
+        try {
+            (e.currentTarget as Element).releasePointerCapture(e.pointerId);
+        } catch (err) {}
+    }
+    setIsResizing(false);
+  };
+
   const handleImageClick = (e: React.MouseEvent) => {
-    if (isDragging) return;
+    if (isDragging || isResizing) return;
 
     // Deselect if clicking empty space
     if (activeTool === 'none') {
@@ -449,10 +504,21 @@ const DashboardCanvas: React.FC<DashboardCanvasProps> = ({
                     )}
 
                     {/* Visual Drag Handle for accessibility/clarity */}
-                    {isSelected && !isBeingDragged && (
-                        <div className="p-1 opacity-0 group-hover/ann:opacity-100 transition-opacity bg-blue-500 rounded-full">
+                    {isSelected && !isBeingDragged && !isResizing && (
+                        <div className="p-1 opacity-0 group-hover/ann:opacity-100 transition-opacity bg-blue-500 rounded-full absolute -left-6 top-1/2 -translate-y-1/2">
                             <GripVertical className="w-3 h-3 text-white" />
                         </div>
+                    )}
+
+                    {/* Visual Resize Handle */}
+                    {isSelected && !isBeingDragged && (
+                        <div 
+                            className="absolute -right-3 -bottom-3 w-4 h-4 bg-white border-2 border-blue-500 rounded-full cursor-se-resize opacity-0 group-hover/ann:opacity-100 transition-opacity z-50 hover:scale-125"
+                            onPointerDown={(e) => handleResizePointerDown(e, ann.id)}
+                            onPointerMove={handleResizePointerMove}
+                            onPointerUp={handleResizePointerUp}
+                            onPointerCancel={handleResizePointerUp}
+                        />
                     )}
 
                     {isSelected ? (
@@ -465,7 +531,8 @@ const DashboardCanvas: React.FC<DashboardCanvasProps> = ({
                                 color: ann.color, 
                                 fontSize: `${ann.fontSize}px`, 
                                 fontWeight: ann.fontWeight, 
-                                fontStyle: ann.fontStyle 
+                                fontStyle: ann.fontStyle,
+                                opacity: ann.opacity ?? 1
                             }}
                             onKeyDown={(e) => {
                                 // Prevent Arrow keys from moving text cursor from bubbling up to dragging logic if text input is active
@@ -481,7 +548,8 @@ const DashboardCanvas: React.FC<DashboardCanvasProps> = ({
                                 color: ann.color, 
                                 fontSize: `${ann.fontSize}px`, 
                                 fontWeight: ann.fontWeight, 
-                                fontStyle: ann.fontStyle 
+                                fontStyle: ann.fontStyle,
+                                opacity: ann.opacity ?? 1
                             }}
                         >
                             {ann.text}
@@ -495,44 +563,41 @@ const DashboardCanvas: React.FC<DashboardCanvasProps> = ({
                           onClick={(e) => e.stopPropagation()}
                         >
                             {/* Row 1: Layering Controls */}
-                            <div className="flex items-center justify-between border-b border-slate-100 dark:border-white/5 pb-3">
-                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Stacking</span>
-                                <div className="flex gap-1 items-center">
+                            <div className="flex flex-col gap-3 border-b border-slate-100 dark:border-white/5 pb-3">
+                                <div className="flex items-center justify-between">
+                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Stacking</span>
+                                    <button 
+                                        onClick={() => deleteAnnotation(ann.id)} 
+                                        className="text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20 p-1.5 rounded-md transition-colors flex items-center gap-1 text-[10px] font-bold uppercase"
+                                        title="Delete"
+                                    >
+                                        <Trash2 className="w-3 h-3" /> Delete
+                                    </button>
+                                </div>
+                                <div className="grid grid-cols-2 gap-2">
                                     <button 
                                         onClick={() => bringToFront(ann.id)} 
-                                        className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-md text-slate-500 hover:text-blue-600 transition-colors"
-                                        title="Bring to Front"
+                                        className="flex items-center justify-center gap-1.5 px-2 py-1.5 bg-slate-50 hover:bg-slate-100 dark:bg-slate-900 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 rounded-md text-slate-600 dark:text-slate-300 hover:text-blue-600 transition-colors text-[10px] font-medium"
                                     >
-                                        <ChevronsUp className="w-4 h-4" />
+                                        <ChevronsUp className="w-3 h-3" /> Bring to Front
                                     </button>
                                     <button 
                                         onClick={() => moveForward(ann.id)} 
-                                        className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-md text-slate-500 hover:text-blue-600 transition-colors"
-                                        title="Move Forward"
+                                        className="flex items-center justify-center gap-1.5 px-2 py-1.5 bg-slate-50 hover:bg-slate-100 dark:bg-slate-900 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 rounded-md text-slate-600 dark:text-slate-300 hover:text-blue-600 transition-colors text-[10px] font-medium"
                                     >
-                                        <ChevronUp className="w-4 h-4" />
+                                        <ChevronUp className="w-3 h-3" /> Move Forward
                                     </button>
                                     <button 
                                         onClick={() => moveBackward(ann.id)} 
-                                        className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-md text-slate-500 hover:text-blue-600 transition-colors"
-                                        title="Move Backward"
+                                        className="flex items-center justify-center gap-1.5 px-2 py-1.5 bg-slate-50 hover:bg-slate-100 dark:bg-slate-900 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 rounded-md text-slate-600 dark:text-slate-300 hover:text-blue-600 transition-colors text-[10px] font-medium"
                                     >
-                                        <ChevronDown className="w-4 h-4" />
+                                        <ChevronDown className="w-3 h-3" /> Move Backward
                                     </button>
                                     <button 
                                         onClick={() => sendToBack(ann.id)} 
-                                        className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-md text-slate-500 hover:text-blue-600 transition-colors"
-                                        title="Send to Back"
+                                        className="flex items-center justify-center gap-1.5 px-2 py-1.5 bg-slate-50 hover:bg-slate-100 dark:bg-slate-900 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 rounded-md text-slate-600 dark:text-slate-300 hover:text-blue-600 transition-colors text-[10px] font-medium"
                                     >
-                                        <ChevronsDown className="w-4 h-4" />
-                                    </button>
-                                    <div className="w-px h-4 bg-slate-200 dark:bg-slate-700 mx-1"></div>
-                                    <button 
-                                        onClick={() => deleteAnnotation(ann.id)} 
-                                        className="text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20 p-1.5 rounded-md transition-colors"
-                                        title="Delete"
-                                    >
-                                        <Trash2 className="w-4 h-4" />
+                                        <ChevronsDown className="w-3 h-3" /> Send to Back
                                     </button>
                                 </div>
                             </div>
@@ -564,35 +629,50 @@ const DashboardCanvas: React.FC<DashboardCanvasProps> = ({
                                 </div>
                             </div>
 
-                            {/* Row 3: Color & Style */}
-                            <div className="space-y-1">
-                                <label className="text-[9px] font-bold text-slate-400 uppercase">Color</label>
-                                <div className="flex gap-2">
-                                    <div className="relative w-8 h-8 rounded-lg border border-slate-200 dark:border-slate-600 overflow-hidden shrink-0 shadow-sm">
-                                        <input 
-                                            type="color" 
-                                            value={ann.color} 
-                                            onChange={(e) => updateAnnotation(ann.id, { color: e.target.value })}
-                                            className="absolute inset-0 w-[150%] h-[150%] -top-[25%] -left-[25%] cursor-pointer p-0 border-none"
-                                        />
+                            {/* Row 3: Color, Style & Opacity */}
+                            <div className="space-y-3">
+                                <div className="space-y-1">
+                                    <label className="text-[9px] font-bold text-slate-400 uppercase">Color & Style</label>
+                                    <div className="flex gap-2">
+                                        <div className="relative w-8 h-8 rounded-lg border border-slate-200 dark:border-slate-600 overflow-hidden shrink-0 shadow-sm">
+                                            <input 
+                                                type="color" 
+                                                value={ann.color} 
+                                                onChange={(e) => updateAnnotation(ann.id, { color: e.target.value })}
+                                                className="absolute inset-0 w-[150%] h-[150%] -top-[25%] -left-[25%] cursor-pointer p-0 border-none"
+                                            />
+                                        </div>
+                                        <div className="flex-1 flex items-center bg-slate-50 dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-700 px-2">
+                                            <span className="text-slate-400 text-xs mr-1">#</span>
+                                            <input 
+                                                type="text" 
+                                                value={ann.color.replace('#', '')}
+                                                onChange={(e) => updateAnnotation(ann.id, { color: `#${e.target.value}` })}
+                                                className="w-full bg-transparent text-xs font-mono outline-none text-slate-900 dark:text-white uppercase"
+                                                maxLength={6}
+                                            />
+                                        </div>
+                                        <button 
+                                            onClick={() => updateAnnotation(ann.id, { fontStyle: ann.fontStyle === 'italic' ? 'normal' : 'italic' })}
+                                            className={`w-8 h-8 flex items-center justify-center rounded-lg border transition-colors ${ann.fontStyle === 'italic' ? 'bg-blue-100 border-blue-200 text-blue-700 dark:bg-blue-900/50 dark:border-blue-800 dark:text-blue-300' : 'border-slate-200 dark:border-slate-700 text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800'}`}
+                                            title="Italic"
+                                        >
+                                            <Italic className="w-4 h-4" />
+                                        </button>
                                     </div>
-                                    <div className="flex-1 flex items-center bg-slate-50 dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-700 px-2">
-                                        <span className="text-slate-400 text-xs mr-1">#</span>
-                                        <input 
-                                            type="text" 
-                                            value={ann.color.replace('#', '')}
-                                            onChange={(e) => updateAnnotation(ann.id, { color: `#${e.target.value}` })}
-                                            className="w-full bg-transparent text-xs font-mono outline-none text-slate-900 dark:text-white uppercase"
-                                            maxLength={6}
-                                        />
+                                </div>
+                                <div className="space-y-1">
+                                    <div className="flex justify-between items-center">
+                                        <label className="text-[9px] font-bold text-slate-400 uppercase">Opacity</label>
+                                        <span className="text-[9px] font-bold text-slate-500">{Math.round((ann.opacity ?? 1) * 100)}%</span>
                                     </div>
-                                    <button 
-                                        onClick={() => updateAnnotation(ann.id, { fontStyle: ann.fontStyle === 'italic' ? 'normal' : 'italic' })}
-                                        className={`w-8 h-8 flex items-center justify-center rounded-lg border transition-colors ${ann.fontStyle === 'italic' ? 'bg-blue-100 border-blue-200 text-blue-700 dark:bg-blue-900/50 dark:border-blue-800 dark:text-blue-300' : 'border-slate-200 dark:border-slate-700 text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800'}`}
-                                        title="Italic"
-                                    >
-                                        <Italic className="w-4 h-4" />
-                                    </button>
+                                    <input 
+                                        type="range" 
+                                        min="0.1" max="1" step="0.05"
+                                        value={ann.opacity ?? 1}
+                                        onChange={(e) => updateAnnotation(ann.id, { opacity: parseFloat(e.target.value) })}
+                                        className="w-full accent-blue-600"
+                                    />
                                 </div>
                             </div>
                         </div>
@@ -705,13 +785,14 @@ const DashboardCanvas: React.FC<DashboardCanvasProps> = ({
         )}
         
         {/* Fullscreen Trigger */}
-        <button 
-            onClick={() => setIsFullscreen(true)}
-            className="absolute top-4 right-4 p-2 bg-black/40 backdrop-blur-md text-white rounded-xl opacity-0 group-hover:opacity-100 transition-all z-20 hover:bg-blue-600 shadow-xl"
-            title="Expand View"
-        >
-            <Maximize2 className="w-4 h-4" />
-        </button>
+        <Tooltip content="Expand View" position="left">
+            <button 
+                onClick={() => setIsFullscreen(true)}
+                className="absolute top-4 right-4 p-2 bg-black/40 backdrop-blur-md text-white rounded-xl opacity-0 group-hover:opacity-100 transition-all z-20 hover:bg-blue-600 shadow-xl"
+            >
+                <Maximize2 className="w-4 h-4" />
+            </button>
+        </Tooltip>
       </div>
 
       {/* Control Bar */}
@@ -740,38 +821,15 @@ const DashboardCanvas: React.FC<DashboardCanvasProps> = ({
             
             {/* Export Quick Access */}
             <div className="relative">
-                <button 
-                    onClick={() => setShowExportMenu(!showExportMenu)}
-                    className="h-full px-5 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-2 text-slate-700 dark:text-slate-300 font-bold text-sm transition-all shadow-sm"
-                >
-                    <Download className="w-4 h-4" />
-                    <span className="hidden sm:inline">Export</span>
-                </button>
-                {showExportMenu && (
-                    <div className="absolute bottom-full right-0 mb-3 w-52 bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border border-slate-200 dark:border-white/10 overflow-hidden flex flex-col z-[100] animate-in slide-in-from-bottom-2 duration-300">
-                        <button onClick={() => handleExport('png')} className="px-5 py-4 text-left text-sm hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 flex items-center gap-3 group transition-colors">
-                            <FileImage className="w-4 h-4 text-emerald-500 group-hover:scale-110 transition-transform" /> 
-                            <div className="flex flex-col">
-                                <span className="font-bold">Transparent PNG</span>
-                                <span className="text-[10px] opacity-50">Best for overlays</span>
-                            </div>
-                        </button>
-                        <button onClick={() => handleExport('jpg')} className="px-5 py-4 text-left text-sm hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 flex items-center gap-3 group transition-colors">
-                            <FileImage className="w-4 h-4 text-blue-500 group-hover:scale-110 transition-transform" /> 
-                            <div className="flex flex-col">
-                                <span className="font-bold">JPG Image</span>
-                                <span className="text-[10px] opacity-50">Solid background</span>
-                            </div>
-                        </button>
-                        <button onClick={() => handleExport('pdf')} className="px-5 py-4 text-left text-sm hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 flex items-center gap-3 group transition-colors border-t border-slate-100 dark:border-white/5">
-                            <FileText className="w-4 h-4 text-red-500 group-hover:scale-110 transition-transform" /> 
-                            <div className="flex flex-col">
-                                <span className="font-bold">PDF / Print</span>
-                                <span className="text-[10px] opacity-50">Multi-page layout</span>
-                            </div>
-                        </button>
-                    </div>
-                )}
+                <Tooltip content="Export Visual (PNG, JPG, PDF, SVG)" position="top">
+                    <button 
+                        onClick={() => setShowExportModal(true)}
+                        className="h-full px-5 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-2 text-slate-700 dark:text-slate-300 font-bold text-sm transition-all shadow-sm"
+                    >
+                        <Download className="w-4 h-4" />
+                        <span className="hidden sm:inline">Export</span>
+                    </button>
+                </Tooltip>
             </div>
           </div>
 
@@ -782,30 +840,33 @@ const DashboardCanvas: React.FC<DashboardCanvasProps> = ({
             
             {/* Contextual Tools */}
             <div className="flex items-center gap-2 shrink-0">
-                <button 
-                  onClick={() => setActiveTool(activeTool === 'text' ? 'none' : 'text')} 
-                  className={`px-4 py-2.5 rounded-xl flex items-center gap-2 text-xs font-bold uppercase tracking-widest transition-all ${activeTool === 'text' ? 'bg-blue-100 text-blue-900 dark:bg-blue-900/50 dark:text-blue-300 ring-2 ring-blue-500/50 shadow-md' : 'text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-900'}`} 
-                  title="Add Text Element"
-                >
-                    <Type size={16}/> <span className="hidden sm:inline">Text</span>
-                </button>
-                <button 
-                  onClick={() => setActiveTool(activeTool === 'comment' ? 'none' : 'comment')} 
-                  className={`px-4 py-2.5 rounded-xl flex items-center gap-2 text-xs font-bold uppercase tracking-widest transition-all ${activeTool === 'comment' ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/50 dark:text-orange-300 ring-2 ring-orange-500/50 shadow-md' : 'text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-900'}`} 
-                  title="Pin Comment"
-                >
-                    <MessageSquare size={16}/> <span className="hidden sm:inline">Comment</span>
-                </button>
+                <Tooltip content="Add Text Element" position="top">
+                    <button 
+                      onClick={() => setActiveTool(activeTool === 'text' ? 'none' : 'text')} 
+                      className={`px-4 py-2.5 rounded-xl flex items-center gap-2 text-xs font-bold uppercase tracking-widest transition-all ${activeTool === 'text' ? 'bg-blue-100 text-blue-900 dark:bg-blue-900/50 dark:text-blue-300 ring-2 ring-blue-500/50 shadow-md' : 'text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-900'}`} 
+                    >
+                        <Type size={16}/> <span className="hidden sm:inline">Text</span>
+                    </button>
+                </Tooltip>
+                <Tooltip content="Pin Comment" position="top">
+                    <button 
+                      onClick={() => setActiveTool(activeTool === 'comment' ? 'none' : 'comment')} 
+                      className={`px-4 py-2.5 rounded-xl flex items-center gap-2 text-xs font-bold uppercase tracking-widest transition-all ${activeTool === 'comment' ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/50 dark:text-orange-300 ring-2 ring-orange-500/50 shadow-md' : 'text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-900'}`} 
+                    >
+                        <MessageSquare size={16}/> <span className="hidden sm:inline">Comment</span>
+                    </button>
+                </Tooltip>
                 
                 <div className="w-px h-8 bg-slate-200 dark:bg-slate-700 mx-1 shrink-0"></div>
                 
-                <button 
-                  onClick={() => setShowCommentSidebar(prev => !prev)} 
-                  className={`p-2.5 rounded-xl transition-all ${showCommentSidebar ? 'bg-slate-100 dark:bg-slate-700 text-blue-600 scale-110' : 'text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-900'}`} 
-                  title="Toggle Discussion Sidebar"
-                >
-                    <Sidebar size={18}/>
-                </button>
+                <Tooltip content="Toggle Discussion Sidebar" position="top">
+                    <button 
+                      onClick={() => setShowCommentSidebar(prev => !prev)} 
+                      className={`p-2.5 rounded-xl transition-all ${showCommentSidebar ? 'bg-slate-100 dark:bg-slate-700 text-blue-600 scale-110' : 'text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-900'}`} 
+                    >
+                        <Sidebar size={18}/>
+                    </button>
+                </Tooltip>
             </div>
 
             <div className="w-px h-8 bg-slate-200 dark:bg-slate-700 shrink-0"></div>
@@ -813,8 +874,12 @@ const DashboardCanvas: React.FC<DashboardCanvasProps> = ({
             {/* Version Strip */}
             <div className="flex-1 flex items-center gap-3 overflow-hidden">
                 <div className="flex gap-1 shrink-0">
-                    <button onClick={onUndo} disabled={!canUndo} className="p-2 text-slate-400 hover:text-blue-600 disabled:opacity-20 hover:bg-slate-50 dark:hover:bg-slate-700 rounded-lg transition-colors" title="Previous Version (Undo)"><RotateCcw size={18}/></button>
-                    <button onClick={onRedo} disabled={!canRedo} className="p-2 text-slate-400 hover:text-blue-600 disabled:opacity-20 hover:bg-slate-50 dark:hover:bg-slate-700 rounded-lg transition-colors" title="Next Version (Redo)"><RotateCw size={18}/></button>
+                    <Tooltip content="Previous Version (Undo)" position="top">
+                        <button onClick={onUndo} disabled={!canUndo} className="p-2 text-slate-400 hover:text-blue-600 disabled:opacity-20 hover:bg-slate-50 dark:hover:bg-slate-700 rounded-lg transition-colors"><RotateCcw size={18}/></button>
+                    </Tooltip>
+                    <Tooltip content="Next Version (Redo)" position="top">
+                        <button onClick={onRedo} disabled={!canRedo} className="p-2 text-slate-400 hover:text-blue-600 disabled:opacity-20 hover:bg-slate-50 dark:hover:bg-slate-700 rounded-lg transition-colors"><RotateCw size={18}/></button>
+                    </Tooltip>
                 </div>
                 
                 {/* Visual History Scroll */}
@@ -861,16 +926,18 @@ const DashboardCanvas: React.FC<DashboardCanvasProps> = ({
           </div>
       </div>
 
-       {/* Fullscreen Immersion Mode */}
+      {/* Fullscreen Immersion Mode */}
        {isFullscreen && (
         <div className="fixed inset-0 z-[200] bg-slate-950 flex items-center justify-center p-12 animate-in fade-in duration-300">
             <div className="absolute top-8 right-8 flex gap-4">
-                <button 
-                  onClick={() => setIsFullscreen(false)} 
-                  className="p-4 bg-white/10 hover:bg-white/20 rounded-full text-white transition-all backdrop-blur-md shadow-2xl border border-white/10 group"
-                >
-                    <X className="w-8 h-8 group-hover:rotate-90 transition-transform" />
-                </button>
+                <Tooltip content="Close Fullscreen" position="left">
+                    <button 
+                      onClick={() => setIsFullscreen(false)} 
+                      className="p-4 bg-white/10 hover:bg-white/20 rounded-full text-white transition-all backdrop-blur-md shadow-2xl border border-white/10 group"
+                    >
+                        <X className="w-8 h-8 group-hover:rotate-90 transition-transform" />
+                    </button>
+                </Tooltip>
             </div>
             
             <div className="relative w-full h-full flex items-center justify-center">
@@ -887,6 +954,14 @@ const DashboardCanvas: React.FC<DashboardCanvasProps> = ({
             </div>
         </div>
       )}
+
+      {/* Export Modal */}
+      <ExportModal 
+        isOpen={showExportModal} 
+        onClose={() => setShowExportModal(false)} 
+        onExport={handleExport}
+        isSvg={isSvg}
+      />
 
     </div>
   );

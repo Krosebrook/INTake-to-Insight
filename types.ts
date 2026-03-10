@@ -46,6 +46,7 @@ export interface GeneratedImage {
   id: string;
   data: string; // Base64 string
   prompt: string;
+  targetAudience?: string;
   timestamp: number;
   level: ComplexityLevel;
   style: VisualStyle;
@@ -73,6 +74,7 @@ export interface Project {
   // Dashboard Config
   dataSources: DataSource[];
   prompt: string;
+  targetAudience?: string;
   level: ComplexityLevel;
   style: VisualStyle;
   aspectRatio?: string;
@@ -117,6 +119,7 @@ export interface Annotation {
   fontSize: number;
   fontWeight?: 'normal' | 'bold';
   fontStyle?: 'normal' | 'italic';
+  opacity?: number;
 }
 
 export interface Comment {

@@ -10,7 +10,7 @@ interface DataConnectorsProps {
   onConnect: (source: DataSource) => void;
 }
 
-type ConnectionState = 'IDLE' | 'CONNECTING' | 'SUCCESS' | 'ERROR';
+type ConnectionState = 'IDLE' | 'CONNECTING' | 'SUCCESS' | 'ERROR' | 'PREVIEW';
 
 const DataConnectors: React.FC<DataConnectorsProps> = ({ onConnect }) => {
   const [activeTab, setActiveTab] = useState<'upload' | 'cloud' | 'api'>('upload');
@@ -18,12 +18,16 @@ const DataConnectors: React.FC<DataConnectorsProps> = ({ onConnect }) => {
   const [statusMsg, setStatusMsg] = useState('');
   const [apiUrl, setApiUrl] = useState('');
   const [authType, setAuthType] = useState('Bearer Token');
+  const [isDragging, setIsDragging] = useState(false);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const [previewData, setPreviewData] = useState<string>('');
 
   const resetState = () => {
       setConnState('IDLE');
       setStatusMsg('');
+      setPreviewData('');
   };
 
   const handleTabChange = (tab: 'upload' | 'cloud' | 'api') => {
@@ -32,10 +36,7 @@ const DataConnectors: React.FC<DataConnectorsProps> = ({ onConnect }) => {
   };
 
   // --- Real File Parsing Logic ---
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
+  const processFile = (file: File) => {
     setConnState('CONNECTING');
     setStatusMsg(`Parsing ${file.name}...`);
 
@@ -52,11 +53,13 @@ const DataConnectors: React.FC<DataConnectorsProps> = ({ onConnect }) => {
                 const arr = Array.isArray(json) ? json : [json];
                 rowCount = arr.length;
                 sampleData = JSON.stringify(arr.slice(0, 5)); // Top 5 items
-            } else {
+            } else if (file.name.endsWith('.csv') || file.name.endsWith('.txt')) {
                 // Assume CSV
                 const lines = text.split('\n');
                 rowCount = lines.length;
                 sampleData = lines.slice(0, 6).join('\n'); // Header + 5 rows
+            } else {
+                throw new Error("Unsupported file type");
             }
 
             // Artificial delay for UX
@@ -89,6 +92,30 @@ const DataConnectors: React.FC<DataConnectorsProps> = ({ onConnect }) => {
         }
     };
     reader.readAsText(file);
+  };
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    processFile(file);
+  };
+
+  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const file = e.dataTransfer.files?.[0];
+    if (!file) return;
+    processFile(file);
   };
 
   const handleCloudConnect = async (type: DataSourceType, name: string) => {
@@ -139,29 +166,46 @@ const DataConnectors: React.FC<DataConnectorsProps> = ({ onConnect }) => {
           // Simulate latency
           await new Promise(resolve => setTimeout(resolve, 1500));
 
-          setConnState('SUCCESS');
-          setStatusMsg("Endpoint verified.");
+          const mockData = {
+              status: "success",
+              source: apiUrl,
+              timestamp: new Date().toISOString(),
+              data: [
+                  { id: 1, metric: "Revenue", value: 45000 },
+                  { id: 2, metric: "Signups", value: 1250 },
+                  { id: 3, metric: "Churn", value: "2.4%" }
+              ]
+          };
 
-          setTimeout(() => {
-              const newSource: DataSource = {
-                  id: Date.now().toString(),
-                  type: 'API_REST',
-                  name: `API: ${new URL(apiUrl).hostname}`,
-                  status: 'CONNECTED',
-                  meta: {
-                      lastSync: Date.now()
-                  },
-                  sampleData: `{"status": "ok", "source": "${apiUrl}", "data": [...]}`
-              };
-              onConnect(newSource);
-              resetState();
-              setApiUrl('');
-          }, 1000);
+          setPreviewData(JSON.stringify(mockData, null, 2));
+          setConnState('PREVIEW');
+          setStatusMsg("Endpoint verified. Preview data below:");
 
       } catch (e) {
           setConnState('ERROR');
           setStatusMsg("Invalid URL or Connection Refused.");
       }
+  };
+
+  const saveApiConnection = () => {
+      setConnState('SUCCESS');
+      setStatusMsg("Connection Saved.");
+      
+      setTimeout(() => {
+          const newSource: DataSource = {
+              id: Date.now().toString(),
+              type: 'API_REST',
+              name: `API: ${new URL(apiUrl).hostname}`,
+              status: 'CONNECTED',
+              meta: {
+                  lastSync: Date.now()
+              },
+              sampleData: previewData
+          };
+          onConnect(newSource);
+          resetState();
+          setApiUrl('');
+      }, 1000);
   };
 
   return (
@@ -198,6 +242,35 @@ const DataConnectors: React.FC<DataConnectorsProps> = ({ onConnect }) => {
           </div>
         )}
 
+        {connState === 'PREVIEW' && (
+           <div className="absolute inset-0 bg-white dark:bg-slate-900 z-20 flex flex-col p-6 animate-in slide-in-from-bottom-4">
+              <div className="flex items-center gap-2 text-green-600 mb-4">
+                 <Check className="w-5 h-5" />
+                 <h3 className="font-bold text-lg">Connection Successful</h3>
+              </div>
+              <p className="text-sm text-slate-500 mb-2">Preview of fetched data:</p>
+              <div className="flex-1 bg-slate-50 dark:bg-slate-950 rounded-xl border border-slate-200 dark:border-slate-800 p-4 overflow-auto custom-scrollbar mb-4">
+                  <pre className="text-xs font-mono text-slate-700 dark:text-slate-300">
+                      {previewData}
+                  </pre>
+              </div>
+              <div className="flex gap-3 mt-auto">
+                  <button 
+                     onClick={resetState}
+                     className="flex-1 py-3 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 rounded-xl text-slate-900 dark:text-white font-bold text-sm transition-colors"
+                  >
+                     Cancel
+                  </button>
+                  <button 
+                     onClick={saveApiConnection}
+                     className="flex-1 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-sm shadow-lg shadow-blue-600/20 transition-all"
+                  >
+                     Save Connection
+                  </button>
+              </div>
+           </div>
+        )}
+
         {connState === 'SUCCESS' && (
           <div className="absolute inset-0 bg-white/90 dark:bg-slate-900/90 z-20 flex flex-col items-center justify-center text-green-600 animate-in zoom-in duration-300">
              <div className="w-16 h-16 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center mb-4">
@@ -225,8 +298,11 @@ const DataConnectors: React.FC<DataConnectorsProps> = ({ onConnect }) => {
           <>
             {activeTab === 'upload' && (
               <div 
-                className="border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-xl p-8 flex flex-col items-center justify-center text-center cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/30 hover:border-blue-500 transition-all group h-full"
+                className={`border-2 border-dashed rounded-xl p-8 flex flex-col items-center justify-center text-center cursor-pointer transition-all group h-full ${isDragging ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20' : 'border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800/30 hover:border-blue-500'}`}
                 onClick={() => fileInputRef.current?.click()}
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
               >
                  <input 
                     type="file" 
@@ -235,10 +311,12 @@ const DataConnectors: React.FC<DataConnectorsProps> = ({ onConnect }) => {
                     accept=".csv,.json,.txt"
                     onChange={handleFileUpload} 
                  />
-                 <div className="w-16 h-16 bg-blue-50 dark:bg-blue-900/30 rounded-full flex items-center justify-center text-blue-900 dark:text-blue-400 mb-4 group-hover:scale-110 transition-transform">
+                 <div className={`w-16 h-16 rounded-full flex items-center justify-center mb-4 transition-transform ${isDragging ? 'bg-blue-100 dark:bg-blue-800 text-blue-600 dark:text-blue-300 scale-110' : 'bg-blue-50 dark:bg-blue-900/30 text-blue-900 dark:text-blue-400 group-hover:scale-110'}`}>
                    <UploadCloud className="w-8 h-8" />
                  </div>
-                 <h3 className="text-lg font-bold text-slate-900 dark:text-white">Click to Upload CSV or JSON</h3>
+                 <h3 className="text-lg font-bold text-slate-900 dark:text-white">
+                    {isDragging ? 'Drop file here' : 'Click or Drag to Upload CSV/JSON'}
+                 </h3>
                  <p className="text-sm text-slate-500 mt-2 max-w-xs">We parse the first 100 rows locally to ground your AI generation in real data.</p>
               </div>
             )}
