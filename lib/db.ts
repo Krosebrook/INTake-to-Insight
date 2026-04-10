@@ -22,15 +22,16 @@
  *   4. Resolve conflicts using a Last-Write-Wins strategy or CRDTs.
  */
 
-import { Project, DataSource, BrandKit, TeamMember, AuditEntry, Workspace, User } from '../types';
+import { Project, DataSource, BrandKit, TeamMember, AuditEntry, Workspace, User, Folder } from '../types';
 
 const DB_NAME = 'infogenius_enterprise_db';
-const DB_VERSION = 4;
+const DB_VERSION = 5;
 const STORE_PROJECTS = 'projects';
 const STORE_SOURCES = 'data_sources';
 const STORE_CONFIG = 'config';
 const STORE_TEAM = 'team';
 const STORE_AUDIT = 'audit';
+const STORE_FOLDERS = 'folders';
 
 class LocalDatabase {
   private db: IDBDatabase | null = null;
@@ -70,6 +71,9 @@ class LocalDatabase {
         if (!db.objectStoreNames.contains(STORE_AUDIT)) {
           const auditStore = db.createObjectStore(STORE_AUDIT, { keyPath: 'id' });
           auditStore.createIndex('timestamp', 'timestamp', { unique: false });
+        }
+        if (!db.objectStoreNames.contains(STORE_FOLDERS)) {
+          db.createObjectStore(STORE_FOLDERS, { keyPath: 'id' });
         }
       };
     });
@@ -177,6 +181,53 @@ class LocalDatabase {
     return new Promise((resolve, reject) => {
       const transaction = db.transaction([STORE_PROJECTS], 'readwrite');
       const store = transaction.objectStore(STORE_PROJECTS);
+      const request = store.delete(id);
+      request.onsuccess = () => resolve();
+      request.onerror = () => reject(request.error);
+    });
+  }
+
+  // --- Folder Operations ---
+
+  async createFolder(folder: Folder): Promise<Folder> {
+    const db = await this.init();
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction([STORE_FOLDERS], 'readwrite');
+      const store = transaction.objectStore(STORE_FOLDERS);
+      const request = store.add(folder);
+      request.onsuccess = () => resolve(folder);
+      request.onerror = () => reject(request.error);
+    });
+  }
+
+  async getAllFolders(): Promise<Folder[]> {
+    const db = await this.init();
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction([STORE_FOLDERS], 'readonly');
+      const store = transaction.objectStore(STORE_FOLDERS);
+      const request = store.getAll();
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+  }
+
+  async updateFolder(folder: Folder): Promise<Folder> {
+    const db = await this.init();
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction([STORE_FOLDERS], 'readwrite');
+      const store = transaction.objectStore(STORE_FOLDERS);
+      folder.updatedAt = Date.now();
+      const request = store.put(folder);
+      request.onsuccess = () => resolve(folder);
+      request.onerror = () => reject(request.error);
+    });
+  }
+
+  async deleteFolder(id: string): Promise<void> {
+    const db = await this.init();
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction([STORE_FOLDERS], 'readwrite');
+      const store = transaction.objectStore(STORE_FOLDERS);
       const request = store.delete(id);
       request.onsuccess = () => resolve();
       request.onerror = () => reject(request.error);

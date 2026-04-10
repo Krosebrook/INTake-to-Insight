@@ -70,6 +70,7 @@ export interface Project {
   thumbnail?: string;
   createdAt: number;
   updatedAt: number;
+  folderId?: string;
   
   // Dashboard Config
   dataSources: DataSource[];
@@ -130,6 +131,14 @@ export interface Comment {
   author: string;
   resolved: boolean;
   timestamp: number;
+}
+
+export interface Folder {
+  id: string;
+  name: string;
+  createdAt: number;
+  updatedAt: number;
+  color?: string;
 }
 
 // --- Enums & Options ---

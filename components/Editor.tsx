@@ -5,6 +5,7 @@
 import React, { useState, useEffect } from 'react';
 import { Project, ComplexityLevel, VisualStyle, DataSource, GeneratedImage, Annotation, Comment, BrandKit } from '../types';
 import { analyzeDashboardRequirements, generateDashboardImage, editDashboardImage, AIError } from '../lib/gemini';
+import { generateThumbnail } from '../lib/image';
 import { db } from '../lib/db';
 import DashboardCanvas from './DashboardCanvas'; 
 import DataConnectors from './DataConnectors';
@@ -144,6 +145,16 @@ const Editor: React.FC<EditorProps> = ({ projectId, onBack }) => {
   const saveProjectState = async (newImage?: string) => {
       const currentImg = newImage || (history[currentIndex]?.data);
       
+      let thumbnail = project?.thumbnail;
+      if (currentImg) {
+          try {
+              thumbnail = await generateThumbnail(currentImg);
+          } catch (e) {
+              console.error("Failed to generate thumbnail", e);
+              thumbnail = currentImg; // Fallback to full image if thumbnailing fails
+          }
+      }
+      
       const p: Project = {
           id: project?.id || internalProjectId,
           title: objective || "Untitled Dashboard",
@@ -157,7 +168,7 @@ const Editor: React.FC<EditorProps> = ({ projectId, onBack }) => {
           aspectRatio,
           colorPalette,
           canvasState: { annotations, comments },
-          thumbnail: currentImg,
+          thumbnail: thumbnail,
           history: history // Persist entire history stack
       };
       
